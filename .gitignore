@@ -1,0 +1,25 @@
+# Virtual environment
+.venv/
+
+# macOS
+.DS_Store
+
+# Large data files (tracked via README, not git)
+*.json
+*.csv
+*.pkl
+*.parquet
+*.duckdb
+*.png
+*.pdf
+
+# DuckDB
+*.duckdb.wal
+
+# Datasets
+dataset_WWW2019/
+tl-dataset-US-*/
+
+# Python
+__pycache__/
+*.pyc

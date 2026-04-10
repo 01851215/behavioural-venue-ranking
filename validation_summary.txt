@@ -1,0 +1,33 @@
+TEMPORAL VALIDATION SUMMARY
+Split date: 2020-01-01
+Training interactions: 2,003,319
+Testing interactions: 239,089
+Overlapping users: 17,746
+Users with future visits: 17,746
+
+============================================================
+EVALUATION A: PER-USER CANDIDATE RE-RANKING
+============================================================
+             Method   NDCG@5    Hit@5  NDCG@10   Hit@10  NDCG@20   Hit@20
+BiRank (Behavioral) 0.082253 0.108702 0.085985 0.120555 0.087501 0.126836
+     Rating (Stars) 0.071240 0.100496 0.076589 0.117111 0.078806 0.125621
+Popularity (Visits) 0.070367 0.101307 0.075225 0.116402 0.077513 0.125621
+             Random 0.068936 0.099787 0.074165 0.115794 0.076160 0.123493
+
+============================================================
+EVALUATION B: VENUE-LEVEL RANKING QUALITY
+============================================================
+             Method  Spearman_rho    Spearman_p  TopK_Precision@10  TopK_Precision@20  TopK_Precision@50
+BiRank (Behavioral)      0.068254  4.435742e-06                0.0               0.00                0.0
+     Rating (Stars)      0.398504 1.714620e-193                0.0               0.00                0.0
+Popularity (Visits)      0.442048 1.489644e-215                0.4               0.35                0.3
+             Random     -0.013969  3.478098e-01                0.0               0.00                0.0
+
+============================================================
+EVALUATION C: GLOBAL RANKING (reference)
+============================================================
+             Method   NDCG@5    Hit@5  NDCG@10   Hit@10  NDCG@20   Hit@20
+BiRank (Behavioral) 0.000049 0.000113 0.000208 0.000620 0.000321 0.001071
+     Rating (Stars) 0.000186 0.000338 0.000236 0.000507 0.000364 0.001014
+Popularity (Visits) 0.020710 0.030880 0.023069 0.038431 0.028667 0.061873
+             Random 0.000229 0.000451 0.000426 0.001071 0.000777 0.002479

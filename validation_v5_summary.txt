@@ -1,0 +1,32 @@
+VALIDATION v5 SUMMARY
+Generated: 2026-04-10 01:32
+Primary split: 2020-01-01
+Train: 2,003,319  Test: 239,089  Overlap: 17,746
+
+FIXES APPLIED:
+  1. Features recomputed from training data only (no leakage)
+  2. NDCG IDCG corrected (uses total relevant candidates)
+  3. Bootstrap 95% CI + Wilcoxon significance tests added
+  4. Per-group evaluation added
+
+IMPROVEMENTS:
+  - Temporal decay: λ=0.5 (half-life ≈ 1.4 yr)
+  - Selective social: confidence ≥ 0.3, γ=0.15
+  - Item-KNN baseline: cosine, top-30 neighbors
+  - IUF-popularity baseline
+
+BEST VARIANT: v5_combined
+  NDCG@10 = 0.076547  95% CI [0.0725, 0.0813]
+  vs v3_baseline: +0.000227 (+0.30%)
+
+PER-USER RE-RANKING RESULTS:
+  Method                      NDCG@10   Hit@10    CI_lo    CI_hi          p
+  v5_combined                  0.0765   0.1165   0.0725   0.0813        ref
+  v5_temporal_decay            0.0764   0.1164   0.0725   0.0811   9.23e-01
+  v5_selective_social          0.0763   0.1162   0.0724   0.0811   9.21e-01
+  v3_baseline                  0.0763   0.1162   0.0724   0.0811   8.89e-01
+  baseline_rating              0.0754   0.1171   0.0713   0.0798   2.92e-01
+  baseline_popularity          0.0743   0.1164   0.0701   0.0785   5.28e-02
+  baseline_iuf                 0.0742   0.1162   0.0699   0.0784   4.78e-02
+  baseline_random              0.0742   0.1149   0.0701   0.0786   3.75e-02
+  baseline_item_knn            0.0724   0.1149   0.0684   0.0768   7.56e-05
