@@ -6,6 +6,32 @@ Includes a validated **coffee shop model** (BiRank with behavioral priors) and a
 
 ---
 
+## Plain English Summary
+
+**The problem:** When you search for a coffee shop or restaurant, most apps rank places by star ratings. But ratings are easy to fake, influenced by mood, and don't tell you whether people actually come back. A place might have 4.8 stars from 12 reviews — or it might have 4.2 stars from people who go there every single week.
+
+**The idea:** Instead of asking "what do people say about this place?", ask "what do people *do*?". If someone visits a cafe every Tuesday morning for three years, that tells you far more than their one-time 5-star review. This project ranks venues using visit behaviour — how often people return, how loyal they are, how consistent the traffic is — rather than what they write.
+
+**How it works in simple terms:** Imagine drawing a web connecting every person to every venue they've visited. A venue that attracts many returning, regular visitors gets boosted. A user who visits frequently and consistently gets treated as a more reliable signal. The algorithm (BiRank) bounces a score back and forth across this web until it settles — important users boost important venues, and important venues boost the importance of users who visit them.
+
+**What we built:**
+- A coffee shop ranking model across 8,500+ venues and 93,000 users, grouping people into four types: Loyalists (their regular), Weekday Regulars (work-routine), Casual Weekenders, and Infrequent Visitors
+- A restaurant model that also considers how far you are from a place, how easy it is to reach by public transport, and whether it matches your cuisine preferences
+- An interactive map dashboard to explore rankings by city
+
+**What we found:** The behavioural approach consistently outperforms star-rating ranking and random recommendation. Crucially, it works best for Loyalists — people with strong habits — which is exactly what you'd expect if the theory is right.
+
+---
+
+**Version history at a glance:**
+
+- **v3 (baseline):** First working behavioural model. Proved the core idea — BiRank on visit behaviour beats star ratings. But the validation had bugs that made results look better than they were.
+- **v4 (Foursquare):** Added check-in data from a second platform (Foursquare) to bring in social signals — whether your friends visited a place. Turned out this made results *worse*: the social data was too noisy and unrelated to coffee habits.
+- **v5 (honest numbers):** Fixed three serious methodological errors: (1) the model was accidentally "cheating" by using future data it shouldn't have seen during training; (2) the accuracy metric was calculated incorrectly; (3) there were no statistical tests proving results weren't just luck. After fixing all three, the numbers dropped (from 0.086 to 0.076) — but these are the *correct* numbers. Also fixed the Foursquare integration to only use high-confidence social links, which stopped it from hurting performance.
+- **v6 (hybrid experiment):** Tested whether adding a second type of algorithm — Matrix Factorization, which finds hidden patterns like "people who like X tend to like Y" — could improve on BiRank. It didn't. The best blend was still essentially pure BiRank (λ=1.0 selected by tuning). This is a meaningful negative result: BiRank's behavioural signals are already capturing what matters, and "collaborative filtering" patterns add nothing extra in this domain.
+
+---
+
 ## Core Thesis
 
 Star ratings are noisy, gameable, and one-dimensional. Behavioral signals — revisit rates, visit regularity, loyalty concentration, exploration diversity — reveal genuine venue quality. A cafe where hundreds of people return weekly is meaningfully different from one with a handful of 5-star reviews.
