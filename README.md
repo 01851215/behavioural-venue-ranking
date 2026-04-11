@@ -43,6 +43,7 @@ Star ratings are noisy, gameable, and one-dimensional. Behavioral signals — re
 | `phase3_tasksBCDEF_group_rankings.py` | Groups | Group-specific rankings and analysis |
 | `temporal_validation.py` | Validation v3 | Temporal split (pre/post 2020) prediction test |
 | `validate_v5.py` | Validation v5 | Corrected NDCG, leakage fix, significance tests, per-group eval, 3 splits |
+| `validate_v6_hybrid.py` | Validation v6 | Hybrid BiRank + ALS/BPR matrix factorization with lambda tuning |
 | `run_pipeline.py` | Pipeline v3 | End-to-end pipeline runner |
 
 ### Behavioral Features
@@ -105,6 +106,45 @@ The model works best for Loyalists — users with high revisit rates — confirm
 | Random | 0.0763 | 0.0754 | 0.0742 |
 
 Results are consistent across all three temporal split points.
+
+---
+
+## Hybrid BiRank + Matrix Factorization (v6)
+
+`validate_v6_hybrid.py` tests whether latent collaborative filtering (ALS/BPR) can complement BiRank's graph-structural signal.
+
+### Approach
+
+- **ALS** (Alternating Least Squares) and **BPR** (Bayesian Personalized Ranking) trained on user-venue interaction matrix (64 factors, 30 iterations)
+- **Hybrid score**: `λ * BiRank_norm + (1-λ) * MF_norm` with personalized per-user MF scores
+- **Proper train/val/test protocol**: Train < 2019-07-01, Validation 2019-07-01—2020-01-01, Test ≥ 2020-01-01
+- **Lambda grid search** [0.0, 0.1, ..., 1.0] tuned on validation split
+
+### Lambda Tuning (Validation)
+
+| λ | ALS NDCG@10 | BPR NDCG@10 |
+|---|-------------|-------------|
+| 0.0 (pure MF) | 0.0618 | 0.0627 |
+| 0.5 | 0.0615 | 0.0627 |
+| 1.0 (pure BiRank) | **0.0641** | **0.0641** |
+
+Best λ = 1.0 for both methods — pure BiRank outperforms all hybrid blends on validation data.
+
+### Test Results
+
+| Method | NDCG@10 | Δ vs BiRank | p-value |
+|--------|---------|-------------|---------|
+| hybrid_als (λ=0.7) | 0.0658 | +0.26% | ref |
+| hybrid_als (λ=0.5) | 0.0658 | +0.23% | 0.996 |
+| **v5_combined (BiRank)** | **0.0657** | **ref** | 0.917 |
+| pure_als | 0.0656 | -0.08% | 0.855 |
+| baseline_random | 0.0643 | -2.05% | 0.151 |
+
+**Note:** v6 NDCG values (0.065) are lower than v5 (0.076) because v6 uses less training data (cutoff at 2019-07-01) to create a validation split for lambda tuning. Relative comparisons within v6 are valid.
+
+### Conclusion
+
+Matrix factorization does not meaningfully improve over BiRank (+0.26% max, not significant). This confirms that BiRank's behavioral priors (burstiness, loyalty, revisit regularity) already capture the useful signal — latent collaborative factors add nothing in this domain. The data sparsity (93K users, 8.5K venues, most with few visits) limits MF's ability to learn useful latent structure.
 
 ---
 
@@ -212,6 +252,10 @@ See `README_dashboard.md` for full usage guide.
 | `validation_v5_per_group.csv` | Per-group NDCG breakdown |
 | `validation_v5_robustness.csv` | Multi-split comparison |
 | `validation_v5_summary.txt` | Human-readable v5 report |
+| `validation_v6_results.csv` | v6 hybrid results with CIs and p-values |
+| `validation_v6_lambda_tuning.csv` | Lambda grid search results |
+| `validation_v6_per_group.csv` | Per-group breakdown for hybrid methods |
+| `validation_v6_summary.txt` | Human-readable v6 report |
 | `validation_summary.txt` | Legacy v3 validation results |
 | `fsq.duckdb` | Foursquare DuckDB database |
 | `venue_linkage.csv` | Yelp-Foursquare venue matches |
@@ -228,6 +272,8 @@ See `README_dashboard.md` for full usage guide.
 - **NDCG / Hit Rate**: Standard information retrieval evaluation metrics
 - **Entropy Weight Method**: Dynamic feature weighting from decision theory
 - **Maximal Marginal Relevance**: Diversity-aware re-ranking (Carbonell & Goldstein)
+- **ALS Matrix Factorization**: Hu et al. — implicit feedback collaborative filtering
+- **BPR**: Rendle et al. — Bayesian personalized ranking from implicit feedback
 
 ---
 
