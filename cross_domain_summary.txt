@@ -1,0 +1,7 @@
+CROSS-DOMAIN TRANSFER ANALYSIS
+Coffee users: 351,642  |  Hotel users: 194,047  |  Overlap: 50,635
+
+Classifier accuracy: 0.293  (chance=0.250)
+Result: Domains largely independent
+
+Transfer priors built for 495,054 users

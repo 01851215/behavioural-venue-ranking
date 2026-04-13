@@ -1,0 +1,15 @@
+HOTEL MODEL VALIDATION SUMMARY
+Split: 2020-01-01  |  Train: 224,216  |  Test: 31,973  |  Overlap: 3,578 users
+
+BEST METHOD: baseline_item_knn
+  NDCG@10 = 0.118800  95% CI [0.1093, 0.1295]
+
+ALL RESULTS:
+  baseline_item_knn              NDCG@10=0.1188  p=5.711e-03
+  hotel_birank                   NDCG@10=0.0998  p=ref
+  hotel_birank_fsq               NDCG@10=0.0998  p=1.000e+00
+  hotel_birank_xdomain           NDCG@10=0.0998  p=1.000e+00
+  hotel_birank_full              NDCG@10=0.0998  p=1.000e+00
+  baseline_popularity            NDCG@10=0.0992  p=2.861e-01
+  baseline_random                NDCG@10=0.0972  p=4.712e-01
+  baseline_rating                NDCG@10=0.0926  p=1.173e-02

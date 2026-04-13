@@ -1,0 +1,31 @@
+HOTEL USER ARCHETYPES
+Generated from 194,047 hotel reviewers
+
+[0] One-Time Tourists  (n=16,324, 8.4%)
+    Hotels reviewed (avg):  2.6
+    States visited (avg):   1.0
+    Reviews/year (avg):     2.01
+    Weekday fraction:       59.2%
+    City entropy:           0.264
+
+[1] One-Time Tourists (Business)  (n=96,423, 49.7%)
+    Hotels reviewed (avg):  1.0
+    States visited (avg):   1.0
+    Reviews/year (avg):     0.99
+    Weekday fraction:       98.8%
+    City entropy:           0.008
+
+[2] Budget Explorers  (n=10,401, 5.4%)
+    Hotels reviewed (avg):  3.8
+    States visited (avg):   2.3
+    Reviews/year (avg):     1.29
+    Weekday fraction:       59.3%
+    City entropy:           1.201
+
+[3] Leisure Travelers  (n=70,899, 36.5%)
+    Hotels reviewed (avg):  1.0
+    States visited (avg):   1.0
+    Reviews/year (avg):     1.00
+    Weekday fraction:       0.1%
+    City entropy:           0.003
+

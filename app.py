@@ -50,6 +50,14 @@ VALIDATION_FILE = DATA_DIR / "validation_results.csv"
 SOCIAL_SIGNALS_FILE = DATA_DIR / "social_venue_signals.csv"
 BIRANK_V4_FILE = DATA_DIR / "coffee_birank_venue_scores_v4.csv"
 
+# Hotel data files
+HOTEL_BUSINESS_FILE      = DATA_DIR / "hotel_businesses.csv"
+HOTEL_BIRANK_FILE        = DATA_DIR / "hotel_birank_venue_scores.csv"
+HOTEL_BIRANK_FSQ_FILE    = DATA_DIR / "hotel_birank_fsq_scores.csv"
+HOTEL_VENUE_FEATURES_FILE= DATA_DIR / "hotel_venue_features.csv"
+HOTEL_USER_GROUPS_FILE   = DATA_DIR / "hotel_user_groups.csv"
+HOTEL_VALIDATION_FILE    = DATA_DIR / "hotel_validation_results.csv"
+
 # City search files
 CITIES_INDEX_FILE = DATA_DIR / "cities_index.pkl"
 CITY_ALIASES_FILE = DATA_DIR / "city_aliases.json"
@@ -625,6 +633,15 @@ def render_data_health_panel(domain: str) -> None:
             REST_SCORES_FILE,
             REST_VENUE_FEATURES_FILE,
             REST_VALIDATION_FILE,
+        ]
+    elif domain == "Hotels & Accommodation":
+        check_paths = [
+            HOTEL_BUSINESS_FILE,
+            HOTEL_BIRANK_FILE,
+            HOTEL_BIRANK_FSQ_FILE,
+            HOTEL_VENUE_FEATURES_FILE,
+            HOTEL_USER_GROUPS_FILE,
+            HOTEL_VALIDATION_FILE,
         ]
     else:
         check_paths = [
@@ -1246,6 +1263,281 @@ def render_restaurant_dashboard(rest_df: pd.DataFrame) -> None:
 
 
 # ============================================================================
+# HOTEL DASHBOARD
+# ============================================================================
+
+HOTEL_BEHAVIORAL_TAGS = {
+    "business":  "Business Hub",
+    "leisure":   "Leisure Destination",
+    "seasonal":  "Seasonal Resort",
+    "loyalist":  "Road Warrior Favourite",
+    "explorer":  "Hidden Gem",
+}
+
+HOTEL_RANKING_MODES = [
+    "BiRank (Behavioural)",
+    "Rating (Stars)",
+    "Popularity (Reviews)",
+    "BiRank + Foursquare",
+]
+
+
+def classify_hotel_profile(row) -> str:
+    bli = float(row.get("business_leisure_ratio") or 0.5)
+    scv = float(row.get("seasonal_cv") or 0.5)
+    msr = float(row.get("multi_stay_rate") or 0.0)
+
+    if msr > 0.05:
+        return "Road Warrior Favourite"
+    if bli > 0.65:
+        return "Business Hub"
+    if scv > 0.5:
+        return "Seasonal Resort"
+    if bli < 0.45:
+        return "Leisure Destination"
+    return "Hidden Gem"
+
+
+def load_hotel_data():
+    b_df  = safe_read_csv(HOTEL_BUSINESS_FILE)
+    s_df  = safe_read_csv(HOTEL_BIRANK_FILE)
+    sf_df = safe_read_csv(HOTEL_BIRANK_FSQ_FILE)
+    vf_df = safe_read_csv(HOTEL_VENUE_FEATURES_FILE)
+
+    if b_df.empty:
+        return b_df, pd.DataFrame()
+
+    merged = b_df.copy()
+    if not s_df.empty and "business_id" in s_df.columns:
+        s_df = s_df.rename(columns={"birank_score": "birank_score"})
+        merged = merged.merge(s_df[["business_id","birank_score"]], on="business_id", how="left")
+    if not sf_df.empty and "business_id" in sf_df.columns:
+        merged = merged.merge(
+            sf_df[["business_id","birank_fsq_score"]],
+            on="business_id", how="left"
+        )
+    if not vf_df.empty and "business_id" in vf_df.columns:
+        feat_cols = ["business_id","business_leisure_ratio","seasonal_cv",
+                     "multi_stay_rate","review_velocity","geographic_diversity",
+                     "venue_stability_cv","traveler_concentration"]
+        vf_sub = vf_df[[c for c in feat_cols if c in vf_df.columns]]
+        merged = merged.merge(vf_sub, on="business_id", how="left")
+
+    for col in ["latitude","longitude","stars","review_count","birank_score"]:
+        if col in merged.columns:
+            merged[col] = pd.to_numeric(merged[col], errors="coerce")
+
+    merged["hotel_profile"] = merged.apply(classify_hotel_profile, axis=1)
+    return b_df, merged
+
+
+def render_hotel_dashboard(hotel_df: pd.DataFrame) -> None:
+    st.subheader("🏨 Hotel & Accommodation Ranking Inspector")
+
+    if hotel_df.empty:
+        st.error("Hotel data is missing or failed to load. Run hotel_data_extract.py first.")
+        return
+
+    # ── Sidebar controls ──────────────────────────────────────────────────────
+    selected_city = render_city_selector(
+        prefix="hotel",
+        city_values=hotel_df["city"],
+        default_city="New Orleans",
+        reset_keys=["hotel_ref_venue","hotel_radius_km","hotel_selected_venue"],
+    )
+
+    ranking_mode = st.sidebar.selectbox(
+        "Ranking Mode", HOTEL_RANKING_MODES, key="hotel_ranking_mode"
+    )
+    subcategory_filter = st.sidebar.multiselect(
+        "Accommodation Type",
+        options=sorted(hotel_df["subcategory"].dropna().unique().tolist()),
+        default=[],
+        key="hotel_subcat",
+        help="Leave blank to show all types",
+    )
+    top_k = st.sidebar.select_slider(
+        "Top K venues", options=[10, 20, 50], value=20, key="hotel_topk"
+    )
+
+    # ── Filter city ───────────────────────────────────────────────────────────
+    city_df = filter_city_frame(hotel_df, selected_city)
+    if city_df.empty:
+        st.warning(f"No hotel venues found for city: {selected_city}.")
+        return
+
+    city_df = city_df.dropna(subset=["latitude","longitude"]).copy()
+    if subcategory_filter:
+        city_df = city_df[city_df["subcategory"].isin(subcategory_filter)]
+    if city_df.empty:
+        st.warning("No venues match the selected filters.")
+        return
+
+    # ── Ranking score selection ───────────────────────────────────────────────
+    if ranking_mode == "BiRank (Behavioural)":
+        score_col = "birank_score"
+    elif ranking_mode == "Rating (Stars)":
+        score_col = "stars"
+    elif ranking_mode == "Popularity (Reviews)":
+        score_col = "review_count"
+    else:
+        score_col = "birank_fsq_score" if "birank_fsq_score" in city_df.columns else "birank_score"
+
+    city_df["_score"] = pd.to_numeric(city_df.get(score_col, 0), errors="coerce").fillna(0)
+    top_df = city_df.nlargest(top_k, "_score").reset_index(drop=True)
+
+    # ── Summary metrics ───────────────────────────────────────────────────────
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Venues in City", f"{len(city_df):,}")
+    col2.metric("Avg Rating", f"{city_df['stars'].mean():.2f}" if "stars" in city_df.columns else "—")
+    col3.metric("Business Hubs", f"{(city_df['hotel_profile']=='Business Hub').sum()}")
+    col4.metric("Seasonal Resorts", f"{(city_df['hotel_profile']=='Seasonal Resort').sum()}")
+
+    st.markdown("---")
+
+    # ── Side-by-side ranking comparison ──────────────────────────────────────
+    col_left, col_right = st.columns([3, 2])
+
+    with col_left:
+        st.markdown(f"#### Top {top_k} Hotels — {ranking_mode}")
+
+        show_cols = ["name","subcategory","stars","hotel_profile"]
+        if "birank_score" in top_df.columns:
+            show_cols.append("birank_score")
+        if "review_count" in top_df.columns:
+            show_cols.append("review_count")
+
+        display_df = top_df[[c for c in show_cols if c in top_df.columns]].copy()
+        if "birank_score" in display_df.columns:
+            display_df["birank_score"] = display_df["birank_score"].round(5)
+
+        display_df.index = range(1, len(display_df)+1)
+        st.dataframe(display_df, use_container_width=True)
+
+        # CSV download
+        csv_data = top_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download CSV", csv_data,
+            f"hotel_rankings_{selected_city}.csv", "text/csv",
+            key="hotel_csv_download"
+        )
+
+    with col_right:
+        st.markdown("#### Behavioral Profile Mix")
+        if "hotel_profile" in city_df.columns:
+            profile_counts = city_df["hotel_profile"].value_counts()
+            for profile, cnt in profile_counts.items():
+                pct = 100 * cnt / len(city_df)
+                st.progress(pct/100, text=f"{profile}: {cnt} ({pct:.0f}%)")
+
+        st.markdown("#### Category Mix")
+        if "subcategory" in city_df.columns:
+            subcat_counts = city_df["subcategory"].value_counts().head(5)
+            for sub, cnt in subcat_counts.items():
+                st.write(f"- {sub}: {cnt}")
+
+    st.markdown("---")
+
+    # ── Map ───────────────────────────────────────────────────────────────────
+    st.markdown(f"#### Map — {selected_city}")
+    try:
+        import folium
+        from streamlit_folium import st_folium
+
+        center_lat = top_df["latitude"].mean()
+        center_lon = top_df["longitude"].mean()
+        m = folium.Map(location=[center_lat, center_lon], zoom_start=12, tiles="CartoDB positron")
+
+        color_map = {
+            "Business Hub":          "#2196F3",
+            "Leisure Destination":   "#4CAF50",
+            "Seasonal Resort":       "#FF9800",
+            "Road Warrior Favourite": "#9C27B0",
+            "Hidden Gem":            "#607D8B",
+        }
+
+        for rank, (_, row) in enumerate(top_df.iterrows(), 1):
+            lat = row.get("latitude")
+            lon = row.get("longitude")
+            if pd.isna(lat) or pd.isna(lon):
+                continue
+
+            profile = str(row.get("hotel_profile",""))
+            color   = color_map.get(profile, "#607D8B")
+            popup_html = f"""
+                <b>#{rank} {row.get('name','?')}</b><br>
+                {row.get('subcategory','Hotel')} | ⭐ {row.get('stars','?')}<br>
+                Profile: {profile}<br>
+                BiRank: {row.get('birank_score',0):.5f}<br>
+                Reviews: {int(row.get('review_count',0)):,}
+            """
+            folium.CircleMarker(
+                location=[lat, lon],
+                radius=8,
+                color=color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.8,
+                popup=folium.Popup(popup_html, max_width=250),
+                tooltip=f"#{rank} {row.get('name','?')}",
+            ).add_to(m)
+
+        st_folium(m, width=None, height=450, key="hotel_map")
+
+        # Legend
+        st.markdown("**Map Legend:**  " +
+            "  ".join(f"<span style='color:{c}'>■</span> {p}"
+                      for p, c in color_map.items()),
+            unsafe_allow_html=True)
+
+    except ImportError:
+        st.info("Install folium + streamlit-folium to see the map.")
+
+    st.markdown("---")
+
+    # ── Venue detail card ─────────────────────────────────────────────────────
+    st.markdown("#### Venue Detail")
+    venue_names = top_df["name"].dropna().tolist()
+    if venue_names:
+        selected_venue = st.selectbox(
+            "Select a hotel for details", venue_names, key="hotel_selected_venue"
+        )
+        row = top_df[top_df["name"] == selected_venue].iloc[0]
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Stars", f"{row.get('stars','?')}")
+        c2.metric("Reviews", f"{int(row.get('review_count',0)):,}")
+        c3.metric("BiRank Score", f"{row.get('birank_score',0):.5f}")
+
+        c1, c2, c3 = st.columns(3)
+        bli = row.get("business_leisure_ratio")
+        if bli is not None and not pd.isna(bli):
+            c1.metric("Business/Leisure Ratio",
+                      f"{float(bli):.1%} weekday",
+                      help="High = business hotel; Low = leisure/resort")
+        scv = row.get("seasonal_cv")
+        if scv is not None and not pd.isna(scv):
+            c2.metric("Seasonal CV",
+                      f"{float(scv):.2f}",
+                      help="Low = consistent year-round demand; High = seasonal spike")
+        msr = row.get("multi_stay_rate")
+        if msr is not None and not pd.isna(msr):
+            c3.metric("Multi-Stay Rate",
+                      f"{float(msr):.1%}",
+                      help="Fraction of guests who reviewed this hotel more than once")
+
+        st.info(f"**Behavioral Profile:** {row.get('hotel_profile','—')}")
+
+    # ── Validation section ────────────────────────────────────────────────────
+    render_validation_section(
+        HOTEL_VALIDATION_FILE,
+        "Hotel Validation: Metrics & Evidence",
+        focus_contains="hotel_birank",
+        key_prefix="hotel",
+    )
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -1262,14 +1554,22 @@ def main() -> None:
         st.cache_resource.clear()
         st.rerun()
 
-    domain = st.sidebar.radio("Select Domain", ["Coffee Shops", "Restaurants"], key="domain_select")
+    domain = st.sidebar.radio(
+        "Select Domain",
+        ["Coffee Shops", "Restaurants", "Hotels & Accommodation"],
+        key="domain_select"
+    )
     render_data_health_panel(domain)
 
-    score_version_key = "v4" if str(st.session_state.get("coffee_score_version", "")).startswith("v4") else "v3"
-    _, data_df, group_df = load_data(domain, score_version=score_version_key)
-    if domain == "Restaurants":
+    if domain == "Hotels & Accommodation":
+        _, hotel_df = load_hotel_data()
+        render_hotel_dashboard(hotel_df)
+    elif domain == "Restaurants":
+        _, data_df, _ = load_data(domain)
         render_restaurant_dashboard(data_df)
     else:
+        score_version_key = "v4" if str(st.session_state.get("coffee_score_version", "")).startswith("v4") else "v3"
+        _, data_df, group_df = load_data(domain, score_version=score_version_key)
         render_coffee_dashboard(data_df, group_df)
 
 

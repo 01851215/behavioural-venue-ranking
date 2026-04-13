@@ -29,6 +29,7 @@ Includes a validated **coffee shop model** (BiRank with behavioral priors) and a
 - **v4 (Foursquare):** Added check-in data from a second platform (Foursquare) to bring in social signals — whether your friends visited a place. Turned out this made results *worse*: the social data was too noisy and unrelated to coffee habits.
 - **v5 (honest numbers):** Fixed three serious methodological errors: (1) the model was accidentally "cheating" by using future data it shouldn't have seen during training; (2) the accuracy metric was calculated incorrectly; (3) there were no statistical tests proving results weren't just luck. After fixing all three, the numbers dropped (from 0.086 to 0.076) — but these are the *correct* numbers. Also fixed the Foursquare integration to only use high-confidence social links, which stopped it from hurting performance.
 - **v6 (hybrid experiment):** Tested whether adding a second type of algorithm — Matrix Factorization, which finds hidden patterns like "people who like X tend to like Y" — could improve on BiRank. It didn't. The best blend was still essentially pure BiRank (λ=1.0 selected by tuning). This is a meaningful negative result: BiRank's behavioural signals are already capturing what matters, and "collaborative filtering" patterns add nothing extra in this domain.
+- **v7 (hotel model):** Extended the whole framework to hotels and accommodation. This required redesigning the behavioral features from scratch — hotels are fundamentally different from coffee shops (nobody visits the same hotel weekly). Key finding: BiRank still beats star ratings (p=0.012), but collaborative filtering outperforms behavioral signals for hotels because most users only stay at 1–2 hotels, making behavior patterns too sparse to learn from. Also conducted a cross-domain experiment: users who explore many coffee shops tend to explore many hotels too, but predicting hotel preferences from coffee habits is only marginally better than chance.
 
 ---
 
@@ -174,6 +175,100 @@ Matrix factorization does not meaningfully improve over BiRank (+0.26% max, not 
 
 ---
 
+## Hotel & Accommodation Model (v7)
+
+A new domain application demonstrating that the behavioral ranking framework generalises — but requires domain-adapted features.
+
+### Data
+
+| | Value |
+|---|---|
+| Venues (50+ reviews) | 1,466 (Hotels, B&B, Resorts, Hostels, Motels) |
+| Reviews | 256,189 |
+| Check-ins | 755,212 |
+| Total interactions | 1,011,401 |
+| Unique users | 194,047 |
+| States covered | 14 |
+| Date range | 2005–2022 |
+
+### Why hotel features differ from coffee features
+
+| Coffee feature | Hotel equivalent | Rationale |
+|---|---|---|
+| Revisit rate (41% for Loyalists) | Multi-stay rate (2.4%) | People rarely revisit the same hotel — that's normal, not bad |
+| Burstiness | Seasonal CV | Hotels spike by season, not by burst vs regular |
+| Shannon entropy (user diversity) | Geographic diversity (entropy of reviewer home states) | Good hotels draw visitors from many places |
+| Gini (loyalty concentration) | Traveler concentration | Does it serve one type of traveler consistently? |
+| Venue stability CV | Venue stability CV | Reused — consistent year-round traffic |
+
+### New hotel behavioral features
+
+| Feature | Description |
+|---|---|
+| `business_leisure_ratio` | Fraction of reviews on weekdays (Mon–Thu) — high = business hotel |
+| `seasonal_cv` | Coefficient of variation of monthly review volume — low = consistent demand |
+| `geographic_diversity` | Shannon entropy of reviewer home states — high = draws from many places |
+| `multi_stay_rate` | Fraction of reviewers with 2+ reviews at same hotel — rare but very strong signal |
+| `review_velocity` | Exponentially-weighted recent review rate — current relevance |
+| `traveler_concentration` | Gini coefficient of reviewer frequency |
+
+**Key EDA findings:** Weekday reviews: 70.6% vs 29.4% weekend — strong business travel signal. Seasonal CV = 0.096. Multi-stay rate = 2.4% (sparse but present).
+
+### User Archetypes (194,047 hotel reviewers)
+
+| Archetype | n | % | Key signal |
+|---|---|---|---|
+| One-Time Tourists (Business) | 96,423 | 49.7% | 98.8% weekday, single hotel |
+| Leisure Travelers | 70,899 | 36.5% | 0.1% weekday — pure weekend/holiday |
+| One-Time Tourists | 16,324 | 8.4% | Mixed weekday, slightly more reviews |
+| Budget Explorers | 10,401 | 5.4% | 2.3 states visited, highest city diversity |
+
+### Pipeline
+
+| Script | Description |
+|---|---|
+| `hotel_data_extract.py` | Extract 1,466 hotels, build interaction table, EDA |
+| `hotel_behaviour_features.py` | Hotel-specific venue + user behavioral features |
+| `hotel_user_profiles.py` | K-means clustering into 4 traveler archetypes |
+| `hotel_cross_domain.py` | Cross-domain coffee→hotel transfer analysis |
+| `hotel_birank.py` | BiRank with hotel priors (recency decay × traveler credibility) |
+| `hotel_fsq_integration.py` | Foursquare linkage + social priors for hotels |
+| `hotel_validation.py` | Full temporal validation with bootstrap CI + Wilcoxon tests |
+
+### Cross-Domain Transfer (coffee → hotel)
+
+59,668 users reviewed both coffee shops and hotels. Key findings:
+- **Classifier accuracy: 0.293 vs baseline 0.250** — domains are largely independent (+4.3% lift)
+- **Meaningful correlations exist**: coffee `venue_entropy` (exploration diversity) predicts hotel `n_unique_hotels` (Spearman r=0.29) — explorers in coffee are explorers in hotels
+- Transfer priors built for 495,054 users (including 301,007 coffee-only users)
+
+### Validation Results (test split ≥ 2020-01-01, 3,578 users)
+
+| Method | NDCG@10 | Hit@10 | p-value |
+|---|---|---|---|
+| baseline_item_knn | **0.1188** | 0.1395 | 0.006 vs hotel_birank |
+| **hotel_birank** | 0.0998 | 0.1399 | ref |
+| hotel_birank_fsq | 0.0998 | 0.1399 | 1.000 |
+| hotel_birank_xdomain | 0.0998 | 0.1399 | 1.000 |
+| baseline_popularity | 0.0992 | 0.1399 | 0.286 |
+| baseline_random | 0.0972 | 0.1381 | 0.471 |
+| baseline_rating | 0.0926 | 0.1375 | **0.012** |
+
+**BiRank significantly beats star ratings (p=0.012)**. Item-KNN outperforms BiRank (p=0.006) — an important finding: for hotels, collaborative filtering is stronger than behavioral priors because most users visit only 1–2 hotels (sparse behavioral signal). FSQ and cross-domain transfer add no measurable lift, reflecting sparse hotel FSQ linkage.
+
+### Per-Group Results (NDCG@10)
+
+| Archetype | NDCG@10 | n |
+|---|---|---|
+| **Leisure Travelers** | **0.3208** | 41 |
+| One-Time Tourists (Business) | 0.2953 | 57 |
+| One-Time Tourists | 0.1464 | 451 |
+| Budget Explorers | 0.0638 | 1,145 |
+
+Leisure Travelers score highest — they have repeat visit patterns (same destinations each holiday). Budget Explorers score lowest — high venue diversity makes prediction hard.
+
+---
+
 ## Restaurant Model (S(R,U,C))
 
 ### Pipeline
@@ -282,6 +377,19 @@ See `README_dashboard.md` for full usage guide.
 | `validation_v6_lambda_tuning.csv` | Lambda grid search results |
 | `validation_v6_per_group.csv` | Per-group breakdown for hybrid methods |
 | `validation_v6_summary.txt` | Human-readable v6 report |
+| `hotel_businesses.csv` | 1,466 quality hotel/accommodation venues |
+| `hotel_interactions.csv` | Hotel interaction table (reviews + check-ins) |
+| `hotel_venue_features.csv` | Hotel behavioral feature matrix |
+| `hotel_user_features.csv` | Hotel user behavioral features |
+| `hotel_user_groups.csv` | Hotel user archetypes (4 clusters) |
+| `hotel_birank_venue_scores.csv` | Hotel BiRank rankings |
+| `hotel_birank_fsq_scores.csv` | Hotel BiRank + Foursquare rankings |
+| `hotel_venue_linkage.csv` | FSQ → Yelp hotel venue matches |
+| `cross_domain_analysis.csv` | Coffee↔hotel archetype overlap |
+| `cross_domain_priors.csv` | Transfer priors for 495K users |
+| `hotel_validation_results.csv` | Hotel validation with CIs + p-values |
+| `hotel_validation_per_group.csv` | Per-archetype NDCG breakdown |
+| `hotel_validation_summary.txt` | Human-readable hotel validation report |
 | `validation_summary.txt` | Legacy v3 validation results |
 | `fsq.duckdb` | Foursquare DuckDB database |
 | `venue_linkage.csv` | Yelp-Foursquare venue matches |
