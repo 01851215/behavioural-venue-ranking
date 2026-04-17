@@ -1,0 +1,6 @@
+age_group,Creative / Media,Education / Academic,Executive / C-Suite,Healthcare,Hospitality / Service,Legal / Finance,Remote / Digital Nomad,Student / Part-time,Tech / Software,Trade / Manual
+Boomer (57+),,0.8092,0.8188,0.8254,0.8193,0.8238,,,,0.807
+Gen X (41-56),0.8247,0.8216,0.817,0.8168,,0.8321,0.8326,,0.8049,0.8248
+Gen Z (18-25),0.835,0.8238,,0.8434,,,0.8175,0.8199,0.8189,
+Senior Millennial (34-40),0.8238,,0.819,0.826,,0.8426,0.8196,,0.8297,
+Young Millennial (26-33),0.813,,,0.8241,,0.8285,0.8318,,0.8326,

@@ -1,0 +1,178 @@
+{
+  "hotel|Budget Explorer": {
+    "n": 9,
+    "ndcg_mean": 0.9177,
+    "ndcg_lo": 0.8847,
+    "ndcg_hi": 0.9381,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.7894,
+    "delta_vs_stars": 0.1283,
+    "pairwise_win_rate": 0.889,
+    "wilcoxon_p": 0.0039
+  },
+  "hotel|OVERALL": {
+    "n": 139,
+    "ndcg_mean": 0.8292,
+    "ndcg_lo": 0.8136,
+    "ndcg_hi": 0.8453,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.8176,
+    "delta_vs_stars": 0.0115,
+    "pairwise_win_rate": 0.813,
+    "wilcoxon_p": 0.3366
+  },
+  "ALL|OVERALL": {
+    "n": 591,
+    "ndcg_mean": 0.7969,
+    "ndcg_lo": 0.791,
+    "ndcg_hi": 0.8027,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.779,
+    "delta_vs_stars": 0.0179,
+    "pairwise_win_rate": 0.695,
+    "wilcoxon_p": 0.0
+  },
+  "coffee|Weekday Regular": {
+    "n": 123,
+    "ndcg_mean": 0.7879,
+    "ndcg_lo": 0.7776,
+    "ndcg_hi": 0.7988,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.7642,
+    "delta_vs_stars": 0.0237,
+    "pairwise_win_rate": 0.748,
+    "wilcoxon_p": 0.0085
+  },
+  "coffee|OVERALL": {
+    "n": 261,
+    "ndcg_mean": 0.8028,
+    "ndcg_lo": 0.7939,
+    "ndcg_hi": 0.8117,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.7638,
+    "delta_vs_stars": 0.039,
+    "pairwise_win_rate": 0.782,
+    "wilcoxon_p": 0.0
+  },
+  "restaurant|Explorer": {
+    "n": 60,
+    "ndcg_mean": 0.7493,
+    "ndcg_lo": 0.7408,
+    "ndcg_hi": 0.7578,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.7813,
+    "delta_vs_stars": -0.032,
+    "pairwise_win_rate": 0.05,
+    "wilcoxon_p": 0.1851
+  },
+  "restaurant|OVERALL": {
+    "n": 191,
+    "ndcg_mean": 0.7654,
+    "ndcg_lo": 0.7596,
+    "ndcg_hi": 0.7716,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.7717,
+    "delta_vs_stars": -0.0063,
+    "pairwise_win_rate": 0.492,
+    "wilcoxon_p": 0.334
+  },
+  "restaurant|Loyalist": {
+    "n": 19,
+    "ndcg_mean": 0.796,
+    "ndcg_lo": 0.7813,
+    "ndcg_hi": 0.8088,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.7617,
+    "delta_vs_stars": 0.0344,
+    "pairwise_win_rate": 0.316,
+    "wilcoxon_p": 0.016
+  },
+  "hotel|Leisure Traveler": {
+    "n": 52,
+    "ndcg_mean": 0.8976,
+    "ndcg_lo": 0.878,
+    "ndcg_hi": 0.9152,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.8291,
+    "delta_vs_stars": 0.0684,
+    "pairwise_win_rate": 0.731,
+    "wilcoxon_p": 0.0001
+  },
+  "coffee|Casual Weekender": {
+    "n": 87,
+    "ndcg_mean": 0.7941,
+    "ndcg_lo": 0.7816,
+    "ndcg_hi": 0.8072,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.7606,
+    "delta_vs_stars": 0.0336,
+    "pairwise_win_rate": 0.816,
+    "wilcoxon_p": 0.0007
+  },
+  "coffee|Loyalist": {
+    "n": 24,
+    "ndcg_mean": 0.792,
+    "ndcg_lo": 0.7642,
+    "ndcg_hi": 0.819,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.7878,
+    "delta_vs_stars": 0.0043,
+    "pairwise_win_rate": 0.792,
+    "wilcoxon_p": 0.5646
+  },
+  "hotel|One-Time Tourist (Business)": {
+    "n": 60,
+    "ndcg_mean": 0.744,
+    "ndcg_lo": 0.7323,
+    "ndcg_hi": 0.7552,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.8047,
+    "delta_vs_stars": -0.0607,
+    "pairwise_win_rate": 0.85,
+    "wilcoxon_p": 0.0
+  },
+  "hotel|One-Time Tourist": {
+    "n": 18,
+    "ndcg_mean": 0.871,
+    "ndcg_lo": 0.8356,
+    "ndcg_hi": 0.9037,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.8414,
+    "delta_vs_stars": 0.0296,
+    "pairwise_win_rate": 0.889,
+    "wilcoxon_p": 0.2645
+  },
+  "restaurant|Mixed / Average": {
+    "n": 72,
+    "ndcg_mean": 0.7623,
+    "ndcg_lo": 0.7515,
+    "ndcg_hi": 0.7742,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.7703,
+    "delta_vs_stars": -0.0081,
+    "pairwise_win_rate": 0.833,
+    "wilcoxon_p": 0.7704
+  },
+  "restaurant|Nightlife Seeker": {
+    "n": 40,
+    "ndcg_mean": 0.7805,
+    "ndcg_lo": 0.7707,
+    "ndcg_hi": 0.7913,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.7644,
+    "delta_vs_stars": 0.0161,
+    "pairwise_win_rate": 0.625,
+    "wilcoxon_p": 0.0094
+  },
+  "coffee|Infrequent Visitor": {
+    "n": 27,
+    "ndcg_mean": 0.9084,
+    "ndcg_lo": 0.8761,
+    "ndcg_hi": 0.9375,
+    "hit_mean": 1.0,
+    "stars_ndcg_mean": 0.7517,
+    "delta_vs_stars": 0.1567,
+    "pairwise_win_rate": 0.815,
+    "wilcoxon_p": 0.0
+  }
+}

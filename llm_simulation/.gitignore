@@ -2,3 +2,7 @@
 results/response_cache.db
 __pycache__/
 *.pyc
+# Allow results CSVs and reports in git
+!results/*.csv
+!results/*.md
+!results/*.json
