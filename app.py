@@ -1748,13 +1748,20 @@ def _render_domain_tab(domain_key: str, domain_label: str, records: pd.DataFrame
         st.info("Metrics data unavailable for this domain.")
 
 
-def _get_openai_key() -> str | None:
-    """Return OpenAI API key from env or .env file."""
-    # First check process env
+def _get_openai_key():
+    """Return OpenAI API key — checks st.secrets (Streamlit Cloud), env, then .env file."""
+    # 1. Streamlit Cloud secrets (set in dashboard under Settings → Secrets)
+    try:
+        key = st.secrets.get("OPENAI_API_KEY", "").strip()
+        if key:
+            return key
+    except Exception:
+        pass
+    # 2. Process environment variable
     key = os.environ.get("OPENAI_API_KEY", "").strip()
     if key:
         return key
-    # Try llm_simulation/.env
+    # 3. Local .env file (dev only)
     env_file = DATA_DIR / "llm_simulation" / ".env"
     if env_file.exists():
         try:

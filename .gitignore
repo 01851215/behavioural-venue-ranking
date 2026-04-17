@@ -4,22 +4,34 @@
 # macOS
 .DS_Store
 
-# Large data files (tracked via README, not git)
-*.json
-*.csv
-*.pkl
-*.parquet
-*.duckdb
-*.png
-*.pdf
-
-# DuckDB
-*.duckdb.wal
-
-# Datasets
+# Raw Yelp / Foursquare datasets (too large for git)
+yelp_dataset/
+yelp_dataset.tar
 dataset_WWW2019/
 tl-dataset-US-*/
+*.duckdb
+*.duckdb.wal
+*.parquet
+*.pdf
+
+# Large interaction/user files (not needed for dashboard)
+restaurant_interactions.csv
+restaurant_user_profiles.csv
+hotel_interactions.csv
+hotel_user_groups.csv
+hotel_user_features.csv
+hotel_birank_user_scores.csv
+
+# LLM simulation secrets
+llm_simulation/.env
+
+# LLM cache
+llm_simulation/results/response_cache.db
 
 # Python
 __pycache__/
 *.pyc
+*.pyo
+
+# Allow all other CSVs, PKL, JSON needed by the dashboard
+# (coffee scores, hotel scores, restaurant scores, venue features, city index, etc.)

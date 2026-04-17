@@ -1,0 +1,21 @@
+method,group,NDCG@10,n_users
+hotel_birank,Budget Explorers,0.0637997829034714,1145
+hotel_birank,Leisure Travelers,0.32084509189895827,41
+hotel_birank,One-Time Tourists,0.14642199407581233,451
+hotel_birank,One-Time Tourists (Business),0.2953160798245686,57
+hotel_birank_fsq,Budget Explorers,0.0637997829034714,1145
+hotel_birank_fsq,Leisure Travelers,0.32084509189895827,41
+hotel_birank_fsq,One-Time Tourists,0.14642199407581233,451
+hotel_birank_fsq,One-Time Tourists (Business),0.2953160798245686,57
+baseline_rating,Budget Explorers,0.056740948976952595,1145
+baseline_rating,Leisure Travelers,0.32084509189895827,41
+baseline_rating,One-Time Tourists,0.13417865865437553,451
+baseline_rating,One-Time Tourists (Business),0.3212157462406066,57
+baseline_popularity,Budget Explorers,0.0628157740176676,1145
+baseline_popularity,Leisure Travelers,0.31184337857143285,41
+baseline_popularity,One-Time Tourists,0.14735660291749456,451
+baseline_popularity,One-Time Tourists (Business),0.2953160798245686,57
+baseline_random,Budget Explorers,0.05947956842967458,1145
+baseline_random,Leisure Travelers,0.30284166524390743,41
+baseline_random,One-Time Tourists,0.14359741160058193,451
+baseline_random,One-Time Tourists (Business),0.3406404960526352,57
