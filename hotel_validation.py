@@ -375,6 +375,55 @@ def evaluate_knn(knn_rank, train_uv, test_uv, k=10):
 
 print(f"    baseline_item_knn:    {time.time()-t0:.1f}s")
 
+# EASE (Embarrassingly Shallow Autoencoders for CF)
+t0 = time.time()
+EASE_LAMBDA = 500.0
+G = (UV.T @ UV).toarray().astype(np.float64)
+G += EASE_LAMBDA * np.eye(G.shape[0])
+B_ease = np.linalg.inv(G)
+diag_ease = np.diag(B_ease).copy()
+B_ease = -(B_ease / diag_ease)
+np.fill_diagonal(B_ease, 0)
+ease_ranking = {}
+for uid in test_uv:
+    if uid not in u2i:
+        continue
+    user_vec = np.asarray(UV[u2i[uid]].todense()).flatten()
+    scores_ease = user_vec @ B_ease
+    ease_ranking[uid] = {v_list[i]: float(scores_ease[i]) for i in range(len(v_list))}
+print(f"    baseline_ease:        {time.time()-t0:.1f}s")
+
+# Hybrid: item-KNN retrieval (top-50) → BiRank re-ranking
+# Stage 1: item-KNN finds top-50 personalized candidates per user
+# Stage 2: BiRank venue score re-ranks within those 50
+t0 = time.time()
+HYBRID_ALPHA = 0.5   # 0=pure birank re-rank, 1=pure knn
+birank_global = rankings["hotel_birank"]  # vid -> score
+birank_max = max(birank_global.values()) if birank_global else 1.0
+birank_min = min(birank_global.values()) if birank_global else 0.0
+birank_range = birank_max - birank_min or 1.0
+
+hybrid_ranking = {}
+for uid in test_uv:
+    if uid not in knn_ranking:
+        continue
+    user_knn = knn_ranking[uid]
+    # Normalise knn scores to [0,1] for this user
+    knn_vals = list(user_knn.values())
+    knn_max = max(knn_vals) if knn_vals else 1.0
+    knn_min = min(knn_vals) if knn_vals else 0.0
+    knn_range = knn_max - knn_min or 1.0
+    # Get top-50 candidates from KNN
+    top50 = sorted(user_knn.items(), key=lambda x: x[1], reverse=True)[:50]
+    # Blend normalised scores
+    blended = {}
+    for vid, knn_score in top50:
+        knn_norm = (knn_score - knn_min) / knn_range
+        br_norm = (birank_global.get(vid, birank_min) - birank_min) / birank_range
+        blended[vid] = HYBRID_ALPHA * knn_norm + (1 - HYBRID_ALPHA) * br_norm
+    hybrid_ranking[uid] = blended
+print(f"    hybrid_knn_birank:    {time.time()-t0:.1f}s")
+
 # ── Evaluate all methods ───────────────────────────────────────────────────────
 print("\n  Evaluating...")
 results = {}
@@ -388,6 +437,14 @@ for name, ranking in rankings.items():
 knn_ndcg, knn_hit = evaluate_knn(knn_ranking, train_uv, test_uv, k=10)
 results["baseline_item_knn"] = {"NDCG@10": knn_ndcg.mean(), "Hit@10": knn_hit.mean(), "n": len(knn_ndcg)}
 per_user_scores["baseline_item_knn"] = knn_ndcg
+
+ease_ndcg, ease_hit = evaluate_knn(ease_ranking, train_uv, test_uv, k=10)
+results["baseline_ease"] = {"NDCG@10": ease_ndcg.mean(), "Hit@10": ease_hit.mean(), "n": len(ease_ndcg)}
+per_user_scores["baseline_ease"] = ease_ndcg
+
+hybrid_ndcg, hybrid_hit = evaluate_knn(hybrid_ranking, train_uv, test_uv, k=10)
+results["hybrid_knn_birank"] = {"NDCG@10": hybrid_ndcg.mean(), "Hit@10": hybrid_hit.mean(), "n": len(hybrid_ndcg)}
+per_user_scores["hybrid_knn_birank"] = hybrid_ndcg
 
 # Compute CIs and p-values (reference = hotel_birank)
 ref_name = "hotel_birank"
@@ -455,7 +512,7 @@ if group_results:
 rows = []
 for name, res in results.items():
     rows.append({
-        "method": name,
+        "Method": name,
         "NDCG@10": res["NDCG@10"],
         "Hit@10":  res["Hit@10"],
         "CI_lo":   res["CI_lo"],

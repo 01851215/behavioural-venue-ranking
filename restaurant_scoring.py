@@ -34,7 +34,7 @@ TOP_K_CANDIDATES = 100
 FINAL_K = 20
 
 # Calibrated weighting and penalties (derived from validation diagnostics)
-PRIOR_WEIGHTS = np.array([0.48, 0.42, 0.10], dtype=float)  # [U_beh, C_mob, R_ctx]
+PRIOR_WEIGHTS = np.array([0.55, 0.45, 0.00], dtype=float)  # [U_beh, C_mob, R_ctx] — R_ctx dropped (ablation showed it hurts NDCG/Hit)
 ADAPTIVE_BLEND = 0.35  # 0=fixed prior, 1=fully EWM dynamic
 CRITIC_LAMBDA = 0.20
 BUSYNESS_TOLERANCE = 60.0

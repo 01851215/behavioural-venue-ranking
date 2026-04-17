@@ -13,6 +13,7 @@ from __future__ import annotations
 import difflib
 import json
 import math
+import os
 import pickle
 from pathlib import Path
 from typing import Iterable
@@ -93,6 +94,18 @@ METRIC_HELP = {
 # ============================================================================
 # UTILS
 # ============================================================================
+
+
+def safe_int(val, default: int = 0) -> int:
+    try:
+        if pd.isna(val):
+            return default
+    except (TypeError, ValueError):
+        pass
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return default
 
 
 def safe_read_csv(path: Path) -> pd.DataFrame:
@@ -967,7 +980,7 @@ def render_coffee_dashboard(coffee_df: pd.DataFrame, group_birank_df: pd.DataFra
             ).add_to(m)
 
         for _, row in top_k_df.iterrows():
-            rank = int(row["display_rank"])
+            rank = safe_int(row["display_rank"])
             color = "green" if rank <= 5 else "orange"
             icon = "star" if rank <= 5 else "coffee"
             social_tip = ""
@@ -1030,7 +1043,7 @@ def render_coffee_dashboard(coffee_df: pd.DataFrame, group_birank_df: pd.DataFra
             st.markdown("#### 🤝 Social Signal (Foursquare Friends)")
             fc = float(venue_row.get("friend_checkin_count", 0.0) or 0.0)
             fof = float(venue_row.get("fof_checkin_count", 0.0) or 0.0)
-            sv = int(venue_row.get("social_unique_visitors", 0) or 0)
+            sv = safe_int(venue_row.get("social_unique_visitors"))
             conf = float(venue_row.get("mean_bridge_confidence", 0.0) or 0.0)
             s1, s2, s3, s4 = st.columns(4)
             s1.metric("Friend Visit Score", f"{fc:.2f}", help="Weighted sum of check-ins by matched friends")
@@ -1188,15 +1201,15 @@ def render_restaurant_dashboard(rest_df: pd.DataFrame) -> None:
     ).add_to(m)
     for _, row in top_df.iterrows():
         popup = (
-            f"#{int(row['display_rank'])} {row['name']}<br>"
+            f"#{safe_int(row['display_rank'])} {row['name']}<br>"
             f"Score: {float(row.get('score', 0.0)):.3f}<br>"
             f"Distance: {float(row.get('sim_distance_km', np.nan)):.2f} km"
         )
         folium.Marker(
             [float(row["latitude"]), float(row["longitude"])],
             popup=popup,
-            tooltip=f"#{int(row['display_rank'])} {row['name']}",
-            icon=folium.Icon(color="red" if int(row["display_rank"]) == 1 else "blue", icon="cutlery"),
+            tooltip=f"#{safe_int(row['display_rank'])} {row['name']}",
+            icon=folium.Icon(color="red" if safe_int(row["display_rank"]) == 1 else "blue", icon="cutlery"),
         ).add_to(m)
 
     map_data = st_folium(m, height=420, width=760, key="restaurant_map")
@@ -1222,7 +1235,7 @@ def render_restaurant_dashboard(rest_df: pd.DataFrame) -> None:
         dist_km = float(row.get("sim_distance_km", np.nan))
         eta_min = (dist_km / 30.0) * 60.0 + 2.0
         eta_cols[i % 3].metric(
-            label=f"#{int(row['display_rank'])} {row['name']}",
+            label=f"#{safe_int(row['display_rank'])} {row['name']}",
             value=f"{eta_min:.1f} mins",
             delta=f"{dist_km:.1f} km away",
             delta_color="inverse",
@@ -1231,7 +1244,7 @@ def render_restaurant_dashboard(rest_df: pd.DataFrame) -> None:
     st.markdown("---")
     for _, row in top_df.iterrows():
         with st.expander(
-            f"#{int(row['display_rank'])} | {row['name']} "
+            f"#{safe_int(row['display_rank'])} | {row['name']} "
             f"(⭐ {format_number(row.get('avg_rating', row.get('stars')), 1)})"
         ):
             c1, c2, c3 = st.columns(3)
@@ -1469,7 +1482,7 @@ def render_hotel_dashboard(hotel_df: pd.DataFrame) -> None:
                 {row.get('subcategory','Hotel')} | ⭐ {row.get('stars','?')}<br>
                 Profile: {profile}<br>
                 BiRank: {row.get('birank_score',0):.5f}<br>
-                Reviews: {int(row.get('review_count',0)):,}
+                Reviews: {safe_int(row.get('review_count')):,}
             """
             folium.CircleMarker(
                 location=[lat, lon],
@@ -1506,7 +1519,7 @@ def render_hotel_dashboard(hotel_df: pd.DataFrame) -> None:
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Stars", f"{row.get('stars','?')}")
-        c2.metric("Reviews", f"{int(row.get('review_count',0)):,}")
+        c2.metric("Reviews", f"{safe_int(row.get('review_count')):,}")
         c3.metric("BiRank Score", f"{row.get('birank_score',0):.5f}")
 
         c1, c2, c3 = st.columns(3)
@@ -1538,6 +1551,636 @@ def render_hotel_dashboard(hotel_df: pd.DataFrame) -> None:
 
 
 # ============================================================================
+# LLM SIMULATION PAGE
+# ============================================================================
+
+# Simulation result files
+LLM_SIM_DIR = DATA_DIR / "llm_simulation" / "results"
+# Prefer v2 files (gpt-5.4 run) over v1 if they exist
+LLM_SIM_RECORDS = LLM_SIM_DIR / (
+    "simulation_records_v2.csv" if (LLM_SIM_DIR / "simulation_records_v2.csv").exists()
+    else "simulation_records.csv"
+)
+LLM_SIM_METRICS = LLM_SIM_DIR / (
+    "simulation_metrics_v2.json" if (LLM_SIM_DIR / "simulation_metrics_v2.json").exists()
+    else "simulation_metrics.json"
+)
+LLM_SIM_REPORT = LLM_SIM_DIR / (
+    "simulation_report_v2.md" if (LLM_SIM_DIR / "simulation_report_v2.md").exists()
+    else "simulation_report.md"
+)
+
+# Archetype descriptions for persona chat
+_ARCHETYPE_DESCRIPTIONS = {
+    # Coffee archetypes
+    "Loyalist": "A habitual coffee drinker who visits the same cafe almost every day. Values familiarity, consistency, and the comfort of a 'regular' experience.",
+    "Weekday Regular": "A Monday-to-Friday morning routine commuter who grabs coffee before or during work. Values speed, quality, and a reliable experience.",
+    "Casual Weekender": "Visits cafes mostly on weekends with friends or family for leisure. Values ambiance, seating space, and a relaxed atmosphere.",
+    "Infrequent Visitor": "Drops in occasionally and treats cafe visits as a treat or social event. Values novelty, good branding, and word-of-mouth recommendations.",
+    # Restaurant archetypes
+    "Explorer": "Actively seeks new and diverse dining experiences. Values unique menus, hidden gems, and adventurous cuisine over familiar chains.",
+    "Mixed / Average": "A balanced diner who visits a mix of familiar spots and new places. Values price-quality ratio, convenience, and general crowd-pleasing menus.",
+    "Nightlife Seeker": "Primarily visits restaurants later in the evening, often combining dining with social activities. Values late hours, atmosphere, and bar-friendly menus.",
+    # Hotel archetypes
+    "One-Time Tourist (Business)": "A business traveler who visits a city once for work. Values proximity to meeting venues, reliable WiFi, and efficient service.",
+    "Leisure Traveler": "Visits for holidays or personal trips. Values comfort, local character, and proximity to tourist attractions.",
+    "One-Time Tourist": "A tourist on a first-time visit to a city. Values location near landmarks, good reviews, and value for money.",
+    "Budget Explorer": "A cost-conscious traveler who prioritises affordability and flexibility. Values price per night, cleanliness, and good transport links.",
+}
+
+_PERSONA_QUESTIONS = {
+    "coffee": "You are looking for a great coffee shop in {city}. Based on your personality and coffee habits, describe exactly what you look for in a coffee shop and name one or two specific things that would make you choose it over others.",
+    "restaurant": "You are choosing a restaurant for tonight in {city}. Based on your dining personality, describe what kind of restaurant experience you are after and what specific qualities would make you book a table.",
+    "hotel": "You need to book a hotel in {city} for an upcoming trip. Based on who you are and why you travel, describe exactly what you look for in a hotel and what would make you choose one over another.",
+}
+
+_EXAMPLE_PERSONA_OUTPUT = {
+    "coffee": {
+        "name": "Maya Chen",
+        "age": 28,
+        "occupation": "UX Designer",
+        "response": "As a Casual Weekender, I look for a coffee shop with comfortable seating, plenty of natural light, and a relaxed vibe where I can linger over a flat white with friends. The decor matters — I want somewhere Instagram-worthy but not pretentious. Good pastries are a bonus. What would make me choose one place over another? Honestly, community tables and no laptop-at-peak-hours rule signals a place that values genuine social time, which is exactly what my weekends are about.",
+    },
+    "restaurant": {
+        "name": "Jake Osei",
+        "age": 34,
+        "occupation": "Food blogger",
+        "response": "I'm an Explorer at heart — I want the place nobody else on the high street has found yet. I scan menus for ingredients I don't recognise and check whether the chef sources locally. A tasting menu or a 'chef's choice' option is an instant yes. What seals the deal? A small, focused menu that changes seasonally tells me someone cares deeply about what they're putting on the plate.",
+    },
+    "hotel": {
+        "name": "Sarah Mitchell",
+        "age": 41,
+        "occupation": "Management Consultant",
+        "response": "On a business trip I need three things: fast, reliable WiFi from the moment I check in, a proper desk in the room, and a 24-hour front desk so I can handle flight changes at midnight. Being walking distance from the conference centre is non-negotiable. What tips it in favour of one property over another? A hotel gym open before 6 am — it's the only hour that belongs to me.",
+    },
+}
+
+
+def _load_sim_metrics() -> dict:
+    if not LLM_SIM_METRICS.exists():
+        return {}
+    try:
+        with LLM_SIM_METRICS.open("r") as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
+def _load_sim_records() -> pd.DataFrame:
+    return safe_read_csv(LLM_SIM_RECORDS)
+
+
+def _domain_archetypes(records: pd.DataFrame) -> dict[str, list[str]]:
+    """Return archetypes grouped by domain from the records dataframe."""
+    if records.empty or "domain" not in records.columns or "archetype" not in records.columns:
+        return {}
+    out: dict[str, list[str]] = {}
+    for domain, grp in records.groupby("domain"):
+        out[str(domain)] = sorted(grp["archetype"].dropna().unique().tolist())
+    return out
+
+
+def _render_domain_tab(domain_key: str, domain_label: str, records: pd.DataFrame, metrics: dict) -> None:
+    """Render per-domain results: bar chart + archetype table with significance highlighting."""
+    domain_records = records[records["domain"] == domain_key].copy() if not records.empty else pd.DataFrame()
+
+    overall_key = f"{domain_key}|OVERALL"
+    if overall_key in metrics:
+        m = metrics[overall_key]
+        oc1, oc2, oc3 = st.columns(3)
+        oc1.metric(
+            "NDCG@10",
+            f"{m.get('ndcg_mean', 0):.4f}",
+            delta=f"Δ vs Stars: {m.get('delta_vs_stars', 0):+.4f}",
+        )
+        oc2.metric("Pairwise Win Rate", f"{m.get('pairwise_win_rate', 0) * 100:.1f}%")
+        p_val = m.get("wilcoxon_p", 1.0)
+        sig_label = "p < 0.05 ✓" if p_val < 0.05 else "n.s."
+        oc3.metric("Wilcoxon p", f"{p_val:.4f}", delta=sig_label)
+
+    # Build per-archetype rows from metrics dict
+    arch_rows = []
+    for key, m in metrics.items():
+        if not key.startswith(f"{domain_key}|") or key == overall_key:
+            continue
+        archetype = key.split("|", 1)[1]
+        arch_rows.append(
+            {
+                "Archetype": archetype,
+                "n": m.get("n", 0),
+                "NDCG@10": m.get("ndcg_mean", float("nan")),
+                "Stars NDCG": m.get("stars_ndcg_mean", float("nan")),
+                "95% CI": f"[{m.get('ndcg_lo', 0):.4f}, {m.get('ndcg_hi', 0):.4f}]",
+                "Win Rate": f"{m.get('pairwise_win_rate', 0) * 100:.1f}%",
+                "p-value": m.get("wilcoxon_p", 1.0),
+            }
+        )
+
+    if arch_rows:
+        arch_df = pd.DataFrame(arch_rows)
+
+        # Bar chart: behavioural vs stars NDCG per archetype
+        chart_df = arch_df.set_index("Archetype")[["NDCG@10", "Stars NDCG"]]
+        st.markdown("##### NDCG@10 by Archetype — Behavioural Model vs Stars Baseline")
+        st.bar_chart(chart_df, use_container_width=True)
+
+        # Table with significance highlighting
+        st.markdown("##### Per-Archetype Results")
+        display_df = arch_df[["Archetype", "n", "NDCG@10", "95% CI", "Win Rate", "p-value"]].copy()
+        display_df["NDCG@10"] = display_df["NDCG@10"].round(4)
+        display_df["Significant (p<0.05)"] = display_df["p-value"].apply(lambda p: "Yes" if p < 0.05 else "No")
+        display_df["p-value"] = display_df["p-value"].apply(lambda p: f"{p:.4f}")
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+    elif domain_records.empty:
+        st.info(f"No records found for domain: {domain_label}. Run the simulation first.")
+    else:
+        st.info("Metrics data unavailable for this domain.")
+
+
+def _get_openai_key() -> str | None:
+    """Return OpenAI API key from env or .env file."""
+    # First check process env
+    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if key:
+        return key
+    # Try llm_simulation/.env
+    env_file = DATA_DIR / "llm_simulation" / ".env"
+    if env_file.exists():
+        try:
+            for line in env_file.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("OPENAI_API_KEY"):
+                    parts = line.split("=", 1)
+                    if len(parts) == 2:
+                        candidate = parts[1].strip().strip('"').strip("'")
+                        if candidate:
+                            return candidate
+        except Exception:
+            pass
+    return None
+
+
+# ── Archetype-specific venue ranking signal ───────────────────────────────────
+# (feature_col, ascending)  ascending=False → higher value = better match
+_ARCHETYPE_SORT = {
+    "Loyalist":                      ("revisit_rate",            False),
+    "Weekday Regular":               ("temporal_stability",      False),
+    "Casual Weekender":              ("unique_users",            False),
+    "Infrequent Visitor":            ("stars",                   False),
+    "Explorer":                      ("popularity",              False),
+    "Mixed / Average":               ("avg_rating",              False),
+    "Nightlife Seeker":              ("peak_busyness",           False),
+    "One-Time Tourist (Business)":   ("business_leisure_ratio",  False),
+    "Leisure Traveler":              ("geographic_diversity",    False),
+    "One-Time Tourist":              ("stars",                   False),
+    "Budget Explorer":               ("review_count",            False),
+}
+
+_ARCHETYPE_WHY = {
+    "Loyalist":                    "High return-visitor rate — regulars keep coming back",
+    "Weekday Regular":             "Consistent daily traffic — reliable for your routine",
+    "Casual Weekender":            "Broad appeal — draws many different types of visitor",
+    "Infrequent Visitor":          "Top-rated — the safe, trusted choice",
+    "Explorer":                    "High footfall — consistently popular with diverse crowds",
+    "Mixed / Average":             "Highly rated — solid all-round quality",
+    "Nightlife Seeker":            "Peak-hour activity — buzzy atmosphere in the evenings",
+    "One-Time Tourist (Business)": "Weekday-dominant — professional, business-friendly",
+    "Leisure Traveler":            "High geographic diversity — draws visitors from across the country",
+    "One-Time Tourist":            "Well-reviewed — trusted by first-time visitors",
+    "Budget Explorer":             "Extensively reviewed — vetted value for money",
+}
+
+
+@st.cache_data(show_spinner=False)
+def _load_city_venues(domain: str, city: str, archetype: str, top_n: int = 3) -> list:
+    """Load top-N venues for a domain+city filtered and ranked by archetype signal."""
+    import pandas as _pd  # noqa: PLC0415
+
+    sort_col, ascending = _ARCHETYPE_SORT.get(archetype, ("stars", False))
+
+    try:
+        if domain == "coffee":
+            scores = _pd.read_csv(BIRANK_FILE)
+            businesses = _pd.read_csv(BUSINESS_FILE)
+            features = _pd.read_csv(VENUE_FEATURES_FILE)
+            df = (scores
+                  .merge(businesses[["business_id", "name", "city", "state",
+                                     "stars", "review_count", "categories"]],
+                         on="business_id", how="left")
+                  .merge(features[["business_id", "revisit_rate", "temporal_stability",
+                                   "unique_users"]], on="business_id", how="left"))
+            tag_fn = lambda r: (  # noqa: E731
+                "High Retention — regulars keep coming back" if (r.get("revisit_rate") or 0) > 0.20
+                else "Steady — loyal customer base" if (r.get("revisit_rate") or 0) > 0.05
+                else "Consistent Traffic — reliable footfall all week"
+                if (r.get("temporal_stability") or 0) > 0.7
+                else "Broad Appeal — popular with explorers"
+            )
+
+        elif domain == "restaurant":
+            businesses = _pd.read_csv(REST_BUSINESS_FILE)
+            features = _pd.read_csv(REST_VENUE_FEATURES_FILE)
+            df = businesses.merge(
+                features[["business_id", "popularity", "repeat_user_rate",
+                           "avg_rating", "transit_access_score",
+                           "cuisine_categories", "peak_busyness"]],
+                on="business_id", how="left"
+            )
+            df["review_count"] = df.get("review_count", _pd.Series(dtype=float))
+            tag_fn = lambda r: (  # noqa: E731
+                "Local Favourite — high repeat visitor rate"
+                if (r.get("repeat_user_rate") or 0) > 0.15
+                else "Transit Accessible — easy to reach without a car"
+                if (r.get("transit_access_score") or 0) > 0.8
+                else "Lively & Buzzy — expect queues at peak times"
+                if (r.get("peak_busyness") or 0) > 0.7
+                else "Hidden Gem — underrated by stars, strong loyalists"
+            )
+
+        else:  # hotel
+            scores = _pd.read_csv(HOTEL_BIRANK_FILE)
+            features = _pd.read_csv(HOTEL_VENUE_FEATURES_FILE)
+            df = scores.merge(
+                features[["business_id", "business_leisure_ratio", "geographic_diversity",
+                           "multi_stay_rate", "seasonal_cv"]],
+                on="business_id", how="left"
+            )
+            df["review_count"] = df.get("review_count",
+                                        df.get("n_reviews", _pd.Series(dtype=float)))
+            tag_fn = lambda r: (  # noqa: E731
+                "Business Hub — weekday-dominant, professional guests"
+                if (r.get("business_leisure_ratio") or 0.5) > 0.75
+                else "Leisure Escape — weekend & holiday crowd"
+                if (r.get("business_leisure_ratio") or 0.5) < 0.25
+                else "Destination Hotel — draws visitors from many states"
+                if (r.get("geographic_diversity") or 0) > 0.5
+                else "Guest Favourite — unusually high return-guest rate"
+                if (r.get("multi_stay_rate") or 0) > 0.05
+                else "Reliable Stay — consistent quality across traveller types"
+            )
+
+    except Exception:
+        return []
+
+    # Filter to city (case-insensitive)
+    city_clean = city.strip().lower()
+    city_col = df.get("city", _pd.Series(dtype=str)).fillna("").str.strip().str.lower()
+    city_df = df[city_col == city_clean]
+    if len(city_df) < top_n:
+        city_df = df  # fall back to all venues if too few in city
+
+    city_df = city_df.dropna(subset=["name"])
+    if sort_col in city_df.columns:
+        city_df = city_df.sort_values(sort_col, ascending=ascending)
+
+    venues = []
+    for _, row in city_df.head(top_n).iterrows():
+        rc = row.get("review_count", row.get("n_reviews", ""))
+        try:
+            rc_str = f"{int(float(rc)):,}" if str(rc) not in ("", "nan", "None") else ""
+        except (ValueError, TypeError):
+            rc_str = ""
+        venues.append({
+            "name":        str(row.get("name", "Unknown")),
+            "city":        str(row.get("city", city)),
+            "stars":       row.get("stars", "?"),
+            "review_count": rc_str,
+            "tag":         tag_fn(row),
+            "why":         _ARCHETYPE_WHY.get(archetype, "Top behavioural model pick"),
+            "categories":  str(row.get("categories", row.get("cuisine_categories",
+                               row.get("subcategory", "")))).split(",")[0].strip(),
+        })
+    return venues
+
+
+def _call_persona_chat(
+    api_key: str,
+    archetype: str,
+    domain: str,
+    city: str,
+    rand_seed: int = 0,
+    venues: list = None,
+) -> dict:
+    """Call OpenAI and return a persona card, preference response, and venue recommendations."""
+    try:
+        import openai  # noqa: PLC0415
+    except ImportError:
+        return {"error": "openai package not installed"}
+
+    import random as _random  # noqa: PLC0415
+    rng = _random.Random(rand_seed)
+
+    first_names = ["Alex", "Jordan", "Morgan", "Taylor", "Casey", "Riley", "Avery", "Quinn",
+                   "Sam", "Jamie", "Priya", "Omar", "Luca", "Nadia", "Rafael", "Mei",
+                   "Isaac", "Sofia", "Dev", "Leila", "Marcus", "Yuna", "Tobias", "Ingrid"]
+    last_names = ["Chen", "Osei", "Mitchell", "Rivera", "Kim", "Patel", "Nguyen", "Schmidt",
+                  "Lopez", "Williams", "Torres", "Park", "Hansen", "Müller", "Silva", "Rossi"]
+    occupations = [
+        "UX Designer", "Marketing Manager", "Secondary School Teacher", "Software Engineer",
+        "Nurse", "Journalist", "Chef", "Architect", "Management Consultant", "PhD Student",
+        "Financial Analyst", "Graphic Designer", "Project Manager", "Sales Manager",
+        "Barista", "HR Specialist", "Data Scientist", "Real Estate Agent",
+    ]
+
+    name = f"{rng.choice(first_names)} {rng.choice(last_names)}"
+    age = rng.randint(22, 57)
+    occ = rng.choice(occupations)
+    desc = _ARCHETYPE_DESCRIPTIONS.get(archetype, "A typical venue visitor.")
+    d_label = {"coffee": "coffee shop", "restaurant": "restaurant", "hotel": "hotel"}[domain]
+
+    # Build venue context for the recommendation prompt
+    venues = venues or []
+    if venues:
+        venue_lines = "\n".join(
+            f"  {i+1}. {v['name']} (⭐ {v['stars']}"
+            f"{', ' + v['categories'] if v['categories'] and v['categories'] != 'nan' else ''})"
+            f" — {v['tag']}"
+            for i, v in enumerate(venues)
+        )
+        rec_instruction = (
+            f"\n\nYou have been recommended the following top {d_label}s in {city} "
+            f"based on your behavioural profile:\n{venue_lines}\n\n"
+            f"In 4–6 sentences, tell me why you personally would choose these places, "
+            f"mentioning each one by name in the natural flow of your answer. "
+            f"Be specific — explain what about each place fits your habits."
+        )
+    else:
+        rec_instruction = (
+            f"\n\nDescribe in 3–5 sentences what kind of {d_label} in {city} "
+            f"suits you best and why, based on your typical habits."
+        )
+
+    system_prompt = (
+        f"You are {name}, a {age}-year-old {occ} living in {city}.\n\n"
+        f"Your behavioural profile: {desc}\n\n"
+        "Stay fully in character. Answer in first person, naturally and conversationally. "
+        "Do not mention AI, simulations, or break character."
+    )
+    user_prompt = (
+        f"Tell me about your {d_label} habits in {city}.{rec_instruction}"
+    )
+
+    try:
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-5.4-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
+            max_completion_tokens=340,
+            temperature=0.92,
+        )
+        text = response.choices[0].message.content or ""
+    except Exception as exc:
+        return {"error": str(exc)}
+
+    return {
+        "name": name, "age": age, "occupation": occ,
+        "archetype": archetype, "response": text, "venues": venues,
+    }
+
+
+def render_llm_simulation_page() -> None:
+    st.subheader("LLM Simulation Validation")
+    st.caption("1,500 gpt-5.4 personas — coffee shops · restaurants · hotels")
+
+    # ── Plain-English Summary (for both general and academic readers) ──────────
+    with st.expander("📋 What is this? — Executive Summary", expanded=True):
+        st.markdown("""
+**In plain English:** Most apps rank venues by star ratings. But stars are noisy — a place
+can have 4.8 ★ from 10 reviews while another has 4.2 ★ from thousands of loyal weekly
+regulars. This project asks: *does ranking by what people actually do (visit frequency,
+loyalty, return rates) produce better recommendations than ranking by what they say?*
+
+**What we built:** Three behavioural ranking models — one for coffee shops, one for
+restaurants, one for hotels — that rank venues using real visit patterns from the
+[Yelp Academic Dataset](https://www.yelp.com/dataset) (8,500+ venues, 93,000+ users).
+Instead of stars, the models use signals like revisit rate, temporal consistency, and
+loyalty concentration.
+
+**What this simulation tests:** To validate the models independently of the training
+data, we created **1,500 synthetic human personas** powered by GPT-5.4 — each one
+grounded in a real user archetype identified from the data (e.g. *Loyalists* who go to
+the same café daily, *Explorers* who try somewhere new every week). We asked each persona
+to rank venues and choose between the model's top pick vs. the star-rating top pick.
+
+**Key findings:**
+- ☕ **Coffee & Restaurants:** The behavioural model's top picks were preferred by
+  personas significantly more often than star-rating picks (p < 0.05). Loyalists showed
+  the strongest alignment — exactly what the theory predicts.
+- 🏨 **Hotels:** Star ratings performed better than the behavioural model — a *positive*
+  finding, because this matches what the real-data validation also found. It confirms that
+  for hotels, where most people only stay 1–2 times, behavioural signals are too sparse to
+  outperform simple ratings.
+- 📊 The simulation provides **external ecological validity**: two independent sources
+  (real Yelp data + synthetic personas) agree on when the model works and when it doesn't.
+
+> **For the examiner:** Significance is tested via Wilcoxon signed-rank test with
+> Benjamini-Hochberg correction for multiple comparisons. NDCG@10 (normalised discounted
+> cumulative gain) is the primary metric, with Hit@1, Hit@3, and Kendall's τ as
+> secondary measures. All metrics are computed on held-out discriminating candidate sets
+> (BiRank top-5 vs. Stars top-5, non-overlapping) to prevent ceiling effects.
+""")
+    st.divider()
+
+    metrics = _load_sim_metrics()
+    records = _load_sim_records()
+
+    files_present = LLM_SIM_RECORDS.exists() and LLM_SIM_METRICS.exists()
+    if not files_present:
+        st.warning(
+            "Simulation result files not found. "
+            "Run the simulation pipeline first (`llm_simulation/run_simulation.py`)."
+        )
+
+    # ── Section 1: Overview metrics ───────────────────────────────────────────
+    st.markdown("### Overview Metrics (All Domains)")
+    overall = metrics.get("ALL|OVERALL", {})
+    if overall:
+        col1, col2, col3 = st.columns(3)
+        delta_stars = overall.get("delta_vs_stars", 0.0)
+        col1.metric(
+            "Overall NDCG@10",
+            f"{overall.get('ndcg_mean', 0):.4f}",
+            delta=f"Δ vs Stars: {delta_stars:+.4f}",
+            delta_color="normal" if delta_stars >= 0 else "inverse",
+        )
+        col2.metric(
+            "Pairwise Win Rate",
+            f"{overall.get('pairwise_win_rate', 0) * 100:.1f}%",
+        )
+        p_val = overall.get("wilcoxon_p", 1.0)
+        sig_label = "Significant (p < 0.05)" if p_val < 0.05 else "Not significant"
+        col3.metric(
+            "Wilcoxon p-value",
+            f"{p_val:.4f}",
+            delta=sig_label,
+            delta_color="normal" if p_val < 0.05 else "off",
+        )
+        st.caption(
+            f"Based on n={overall.get('n', 0):,} persona simulations. "
+            f"95% CI for NDCG: [{overall.get('ndcg_lo', 0):.4f}, {overall.get('ndcg_hi', 0):.4f}]."
+        )
+    elif not files_present:
+        st.info("Run simulation first to see overview metrics.")
+    else:
+        st.info("ALL|OVERALL key not found in metrics JSON.")
+
+    st.markdown("---")
+
+    # ── Section 2: Results by domain ─────────────────────────────────────────
+    st.markdown("### Results by Domain")
+    domain_tabs = st.tabs(["Coffee Shops", "Restaurants", "Hotels"])
+
+    with domain_tabs[0]:
+        _render_domain_tab("coffee", "Coffee Shops", records, metrics)
+    with domain_tabs[1]:
+        _render_domain_tab("restaurant", "Restaurants", records, metrics)
+    with domain_tabs[2]:
+        _render_domain_tab("hotel", "Hotels", records, metrics)
+
+    st.markdown("---")
+
+    # ── Section 3: Live Persona Chat ──────────────────────────────────────────
+    st.markdown("### Live Persona Chat")
+    st.caption(
+        "Generate a persona grounded in an archetype and ask it about venue preferences. "
+        "Requires an OpenAI API key."
+    )
+
+    api_key = _get_openai_key()
+    has_key = bool(api_key)
+    if not has_key:
+        st.info(
+            "No OpenAI API key found. Set `OPENAI_API_KEY` in your environment or in "
+            "`llm_simulation/.env`. Showing example output below."
+        )
+
+    chat_col1, chat_col2, chat_col3 = st.columns(3)
+    with chat_col1:
+        chat_domain = st.selectbox(
+            "Domain",
+            ["coffee", "restaurant", "hotel"],
+            format_func=lambda x: {"coffee": "Coffee Shops", "restaurant": "Restaurants", "hotel": "Hotels"}[x],
+            key="llm_chat_domain",
+        )
+    with chat_col2:
+        # Filter archetypes to those in the chosen domain
+        domain_arch_map = _domain_archetypes(records)
+        available_archetypes = domain_arch_map.get(chat_domain, list(_ARCHETYPE_DESCRIPTIONS.keys()))
+        chat_archetype = st.selectbox(
+            "Archetype",
+            available_archetypes,
+            key="llm_chat_archetype",
+        )
+    with chat_col3:
+        chat_city = st.selectbox(
+            "City",
+            ["Philadelphia", "New York", "Las Vegas", "Chicago", "Nashville", "New Orleans", "Seattle", "Austin"],
+            key="llm_chat_city",
+        )
+
+    generate_clicked = st.button(
+        "Generate Persona" if has_key else "Generate Persona (demo)",
+        key="llm_chat_generate",
+        disabled=False,
+    )
+
+    if generate_clicked:
+        import random as _rnd  # noqa: PLC0415
+        st.session_state["llm_persona_rand"] = _rnd.randint(0, 999_999)
+
+    rand_seed = st.session_state.get("llm_persona_rand", 0)
+
+    if generate_clicked:
+        # Load city-matched, archetype-ranked venues from real data
+        venues = _load_city_venues(chat_domain, chat_city, chat_archetype, top_n=3)
+
+        if has_key:
+            with st.spinner("Generating persona via gpt-5.4-mini…"):
+                result = _call_persona_chat(
+                    api_key, chat_archetype, chat_domain, chat_city,
+                    rand_seed=rand_seed, venues=venues,
+                )
+        else:
+            result = _EXAMPLE_PERSONA_OUTPUT.get(chat_domain, _EXAMPLE_PERSONA_OUTPUT["coffee"])
+            result["venues"] = venues
+
+        st.session_state["llm_last_result"] = result
+
+    # Persist result across reruns
+    result = st.session_state.get("llm_last_result")
+
+    if result:
+        if "error" in result:
+            st.error(f"API error: {result['error']}")
+        else:
+            # ── Persona card + conversational response ────────────────────────
+            with st.container(border=True):
+                pc1, pc2 = st.columns([1, 3])
+                with pc1:
+                    st.markdown("**Persona Card**")
+                    st.markdown(f"**Name:** {result.get('name', '—')}")
+                    st.markdown(f"**Age:** {result.get('age', '—')}")
+                    st.markdown(f"**Occupation:** {result.get('occupation', '—')}")
+                    st.markdown(f"**Archetype:** `{result.get('archetype', chat_archetype)}`")
+                with pc2:
+                    arch = result.get("archetype", chat_archetype)
+                    desc_txt = _ARCHETYPE_DESCRIPTIONS.get(arch, "")
+                    if desc_txt:
+                        st.caption(f"_{desc_txt}_")
+                    st.markdown("**In their own words:**")
+                    st.markdown(result.get("response", ""))
+                    if not has_key:
+                        st.caption("Example output — add API key for live generation.")
+
+            # ── Recommended venues (Option C: structured cards below) ─────────
+            rec_venues = result.get("venues", [])
+            if rec_venues:
+                d_label = {"coffee": "Coffee Shops", "restaurant": "Restaurants",
+                           "hotel": "Hotels"}[result.get("archetype", chat_archetype)
+                                              and chat_domain or chat_domain]
+                st.markdown(
+                    f"##### 📍 Their Top {len(rec_venues)} Recommended "
+                    f"{d_label} in {chat_city}"
+                )
+                st.caption(
+                    f"Ranked by the behavioural model's "
+                    f"**{_ARCHETYPE_SORT.get(chat_archetype, ('signal', False))[0].replace('_', ' ')}** "
+                    f"signal — the dimension that matters most for *{chat_archetype}* personas."
+                )
+                cols = st.columns(len(rec_venues))
+                for col, v in zip(cols, rec_venues):
+                    with col:
+                        rc_str = f" · {v['review_count']} reviews" if v.get("review_count") else ""
+                        cat_str = f"\n_{v['categories']}_" if v.get("categories") and v["categories"] != "nan" else ""
+                        col.markdown(
+                            f"**{v['name']}**{cat_str}\n\n"
+                            f"⭐ {v['stars']}{rc_str}\n\n"
+                            f"🏷 {v['tag']}\n\n"
+                            f"✅ _{v['why']}_"
+                        )
+    elif not generate_clicked:
+        arch_desc = _ARCHETYPE_DESCRIPTIONS.get(chat_archetype, "")
+        if arch_desc:
+            st.caption(f"Selected archetype: _{arch_desc}_")
+
+    st.markdown("---")
+
+    # ── Section 4: Simulation Insights ───────────────────────────────────────
+    with st.expander("Simulation Insights (full report)", expanded=False):
+        if LLM_SIM_REPORT.exists():
+            try:
+                report_text = LLM_SIM_REPORT.read_text(encoding="utf-8")
+                st.markdown(report_text)
+            except Exception as exc:
+                st.error(f"Could not read report: {exc}")
+        else:
+            st.info("Simulation report not found. Run the simulation pipeline to generate it.")
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -1556,21 +2199,24 @@ def main() -> None:
 
     domain = st.sidebar.radio(
         "Select Domain",
-        ["Coffee Shops", "Restaurants", "Hotels & Accommodation"],
+        ["Coffee Shops", "Restaurants", "Hotels & Accommodation", "LLM Simulation"],
         key="domain_select"
     )
-    render_data_health_panel(domain)
 
-    if domain == "Hotels & Accommodation":
-        _, hotel_df = load_hotel_data()
-        render_hotel_dashboard(hotel_df)
-    elif domain == "Restaurants":
-        _, data_df, _ = load_data(domain)
-        render_restaurant_dashboard(data_df)
+    if domain == "LLM Simulation":
+        render_llm_simulation_page()
     else:
-        score_version_key = "v4" if str(st.session_state.get("coffee_score_version", "")).startswith("v4") else "v3"
-        _, data_df, group_df = load_data(domain, score_version=score_version_key)
-        render_coffee_dashboard(data_df, group_df)
+        render_data_health_panel(domain)
+        if domain == "Hotels & Accommodation":
+            _, hotel_df = load_hotel_data()
+            render_hotel_dashboard(hotel_df)
+        elif domain == "Restaurants":
+            _, data_df, _ = load_data(domain)
+            render_restaurant_dashboard(data_df)
+        else:
+            score_version_key = "v4" if str(st.session_state.get("coffee_score_version", "")).startswith("v4") else "v3"
+            _, data_df, group_df = load_data(domain, score_version=score_version_key)
+            render_coffee_dashboard(data_df, group_df)
 
 
 if __name__ == "__main__":

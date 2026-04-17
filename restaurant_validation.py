@@ -16,6 +16,7 @@ import numpy as np
 from pathlib import Path
 from collections import defaultdict
 import math
+from scipy import sparse
 
 # ── Paths ──
 BASE = Path(__file__).resolve().parent
@@ -30,9 +31,9 @@ TEST_START_DATE = "2020-01-01"
 EVAL_K = [5, 10, 20]
 
 # Calibrated full-model parameters (kept aligned with scoring script defaults).
-FULL_W_BEH = 0.48
-FULL_W_MOB = 0.42
-FULL_W_CTX = 0.10
+FULL_W_BEH = 0.55
+FULL_W_MOB = 0.45
+FULL_W_CTX = 0.00
 CRITIC_LAMBDA = 0.20
 BUSYNESS_TOLERANCE = 60.0
 QUEUE_MIN_FACTOR = 0.75
@@ -251,11 +252,57 @@ def main():
     for m in methods:
         res = simulate_ranking(users, venues, lookup, test_inter, kind=m)
         results.append(res)
-        
+
+    # EASE personalized baseline (restricted to top-2000 venues, same as simulate_ranking)
+    print("  ▹ Evaluating: EASE ...")
+    EASE_LAMBDA = 500.0
+    top_v = venues.sort_values("popularity", ascending=False).head(2000)["business_id"].tolist()
+    v_list = top_v
+    v2i_r = {v: i for i, v in enumerate(v_list)}
+    train_users_ease = train["user_id"].unique()
+    u2i_r = {u: i for i, u in enumerate(train_users_ease)}
+    matched_r = train[train["business_id"].isin(v2i_r) & train["user_id"].isin(u2i_r)]
+    rows_r = matched_r["user_id"].map(u2i_r).values
+    cols_r = matched_r["business_id"].map(v2i_r).values
+    UV_r = sparse.csr_matrix(
+        (np.ones(len(rows_r)), (rows_r, cols_r)),
+        shape=(len(u2i_r), len(v_list))
+    )
+    G_r = (UV_r.T @ UV_r).toarray().astype(np.float64)
+    n_v_r = len(v_list)
+    G_r += EASE_LAMBDA * np.eye(n_v_r)
+    B_r = np.linalg.inv(G_r)
+    diag_r = np.diag(B_r).copy()
+    B_r = -(B_r / diag_r)
+    np.fill_diagonal(B_r, 0)
+    ease_metrics = {f"NDCG@{k}": [] for k in EVAL_K}
+    ease_metrics.update({f"Hit@{k}": [] for k in EVAL_K})
+    valid_ease = 0
+    for uid in test_inter.index:
+        if uid not in u2i_r or valid_ease >= 500:
+            continue
+        future = set(test_inter.loc[uid])
+        if not future:
+            continue
+        user_vec = np.asarray(UV_r[u2i_r[uid]].todense()).flatten()
+        scores_e = user_vec @ B_r
+        ranked = [v_list[i] for i in np.argsort(-scores_e)]
+        rel = [1 if v in future else 0 for v in ranked]
+        if sum(rel) == 0:
+            continue
+        valid_ease += 1
+        for k in EVAL_K:
+            ease_metrics[f"NDCG@{k}"].append(ndcg_at_k(rel, k))
+            ease_metrics[f"Hit@{k}"].append(hit_at_k(rel, k))
+    ease_res = {"Method": "EASE"}
+    for k in ease_metrics:
+        ease_res[k] = round(np.mean(ease_metrics[k]), 4) if ease_metrics[k] else 0.0
+    results.append(ease_res)
+
     df = pd.DataFrame(results)
     print("\n✅ Validation Results:")
     print(df.to_string(index=False))
-    
+
     df.to_csv(OUT_FILE, index=False)
     print(f"\n  → Results saved to {OUT_FILE.name}")
 
