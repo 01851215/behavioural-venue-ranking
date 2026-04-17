@@ -2,7 +2,7 @@
 
 A venue ranking system that ranks businesses by what people **do** (visit patterns, loyalty, regularity) rather than what they **say** (star ratings). Built on the Yelp Academic Dataset, supplemented with Foursquare check-ins and Transitland transit data.
 
-Includes a validated **coffee shop model** (BiRank with behavioral priors) and a **restaurant model** (multi-objective S(R,U,C) scoring with mobility and context awareness), plus an interactive Streamlit dashboard for exploration.
+Includes a validated **coffee shop model** (BiRank with behavioral priors), a **restaurant model** (multi-objective S(R,U,C) scoring with mobility and context awareness), a **hotel model** (BiRank with domain-adapted features), and an **LLM simulation validation layer** — 3,360 GPT-5.4 synthetic personas grounded in real user archetypes and published consumer-behaviour research. Explore rankings through an interactive Streamlit dashboard.
 
 ---
 
@@ -17,9 +17,11 @@ Includes a validated **coffee shop model** (BiRank with behavioral priors) and a
 **What we built:**
 - A coffee shop ranking model across 8,500+ venues and 93,000 users, grouping people into four types: Loyalists (their regular), Weekday Regulars (work-routine), Casual Weekenders, and Infrequent Visitors
 - A restaurant model that also considers how far you are from a place, how easy it is to reach by public transport, and whether it matches your cuisine preferences
-- An interactive map dashboard to explore rankings by city
+- A hotel model that redesigns all behavioral features from scratch — hotels require completely different signals than cafés
+- An LLM simulation layer with 3,360 synthetic personas (GPT-5.4) that independently validates the models — personas choose between venues just like real users would
+- An interactive map and simulation dashboard to explore rankings and live persona responses by city
 
-**What we found:** The behavioural approach consistently outperforms star-rating ranking and random recommendation. Crucially, it works best for Loyalists — people with strong habits — which is exactly what you'd expect if the theory is right.
+**What we found:** The behavioural approach consistently outperforms star-rating ranking and random recommendation. Crucially, it works best for Loyalists — people with strong habits — which is exactly what you'd expect if the theory is right. The LLM simulation confirms this: Loyalist personas and high-loyalty occupation clusters (Legal/Finance, Executive) align most strongly with the model's top picks.
 
 ---
 
@@ -30,6 +32,7 @@ Includes a validated **coffee shop model** (BiRank with behavioral priors) and a
 - **v5 (honest numbers):** Fixed three serious methodological errors: (1) the model was accidentally "cheating" by using future data it shouldn't have seen during training; (2) the accuracy metric was calculated incorrectly; (3) there were no statistical tests proving results weren't just luck. After fixing all three, the numbers dropped (from 0.086 to 0.076) — but these are the *correct* numbers. Also fixed the Foursquare integration to only use high-confidence social links, which stopped it from hurting performance.
 - **v6 (hybrid experiment):** Tested whether adding a second type of algorithm — Matrix Factorization, which finds hidden patterns like "people who like X tend to like Y" — could improve on BiRank. It didn't. The best blend was still essentially pure BiRank (λ=1.0 selected by tuning). This is a meaningful negative result: BiRank's behavioural signals are already capturing what matters, and "collaborative filtering" patterns add nothing extra in this domain.
 - **v7 (hotel model):** Extended the whole framework to hotels and accommodation. This required redesigning the behavioral features from scratch — hotels are fundamentally different from coffee shops (nobody visits the same hotel weekly). Key finding: BiRank still beats star ratings (p=0.012), but collaborative filtering outperforms behavioral signals for hotels because most users only stay at 1–2 hotels, making behavior patterns too sparse to learn from. Also conducted a cross-domain experiment: users who explore many coffee shops tend to explore many hotels too, but predicting hotel preferences from coffee habits is only marginally better than chance.
+- **v8 (LLM simulation):** Added two independent external validation studies using GPT-5.4 synthetic personas. **Study 1** — 1,500 personas grounded in the four behavioural archetypes identified from Yelp data (Loyalist, Weekday Regular, Casual Weekender, Infrequent Visitor) across all three domains. Each persona performs three tasks: venue ranking (NDCG@10), pairwise head-to-head (BiRank vs. stars), and revisit prediction. Metrics include Hit@1/3, Kendall τ, BH-corrected p-values, Cohen's d, and rank-biserial correlation. **Study 2** — 1,860 personas across a 5 age-group × 10 occupation cross-matrix (Gen Z → Boomer; Tech/Software → Remote/Digital Nomad), grounded in 51 published consumer-behaviour sources (NCA, McKinsey, J.D. Power, GBTA, Hilton Trends Report, etc.). Both studies run alongside the real-data validation for independent triangulation. Also added a live Persona Chat in the Streamlit dashboard: pick an archetype, city, and domain — a GPT-5.4-mini persona recommends real venues from the dataset and explains why in character.
 
 ---
 
@@ -320,9 +323,121 @@ Raw social signals added noise. v5 addressed this with selective social filterin
 
 ---
 
+## LLM Simulation Validation (v8)
+
+External ecological validation using GPT-5.4 synthetic personas. Two independent studies run alongside the real-data validation.
+
+### Why LLM simulation?
+
+The real-data validation (v5–v7) tests whether the model predicts *held-out historical behaviour*. The LLM simulation tests something different: do realistic synthetic *people* — grounded in published consumer-behaviour research — actually prefer the venues our model ranks highest? These are independent sources of evidence; if they agree, the conclusion is much stronger.
+
+---
+
+### Study 1 — Behavioural Archetype Personas (1,500 personas)
+
+Personas grounded in the four archetypes discovered from Yelp data (Loyalists, Weekday Regulars, Casual Weekenders, Infrequent Visitors) across all three domains.
+
+**Pipeline:** `llm_simulation/main_v2.py`
+
+| Phase | What it does |
+|-------|-------------|
+| Phase 1 | Discriminating candidate sets (BiRank top-5 vs Stars top-5, non-overlapping) |
+| Phase 2 | Manipulation check, null-persona baseline, inverted-persona sanity test |
+| Phase 3 | Revisit calibration (Spearman r), cross-domain consistency, per-persona variance |
+| Phase 4 | BH correction, Cohen's d, rank-biserial, stratified bootstrap |
+| Phase 5 | Tiered models (`gpt-5.4-mini` ranking, `gpt-5.4` pairwise/revisit) + Claude Sonnet replication |
+
+**Each persona runs 3 tasks:**
+1. **Ranking task** — rank 10 venues; NDCG@10 vs. model ranking
+2. **Pairwise task** — BiRank top-1 vs. Stars top-1; win rate
+3. **Revisit task** — likelihood of returning; Spearman correlation with model's revisit signals
+
+**Key results (Study 1 — gpt-5.4, 1,500 personas):**
+
+| Domain | NDCG@10 | Hit@1 | Hit@3 | Δ vs Stars | Win Rate | p (BH) |
+|--------|---------|-------|-------|-----------|----------|--------|
+| Coffee | 0.7948 | 0.118 | 0.278 | +0.0190 | 48.4% | <0.001 |
+| Restaurants | 0.7907 | 0.268 | 0.680 | +0.0216 | 51.0% | <0.001 |
+| Hotels | 0.7851 | 0.212 | 0.514 | −0.0276 | 47.0% | <0.001 |
+
+Hotels perform below stars — **a positive result**, consistent with v7 real-data findings where item-KNN beat BiRank. Two independent methods agree.
+
+---
+
+### Study 2 — Occupation × Age Cross-Matrix (1,860 personas)
+
+A full 5 age-group × 10 occupation grid grounded in 51 published consumer-behaviour sources.
+
+**Pipeline:** `llm_simulation/main_study2.py`
+
+**Age groups:** Gen Z (18–25) · Young Millennial (26–33) · Senior Millennial (34–40) · Gen X (41–56) · Boomer (57+)
+
+**Occupation clusters:** Tech/Software · Healthcare · Education/Academic · Creative/Media · Legal/Finance · Trade/Manual · Executive/C-Suite · Hospitality/Service · Student/Part-time · Remote/Digital Nomad
+
+**31 valid cells** (some age × occupation combinations excluded as unrealistic) × 3 domains × 20 personas = 1,860 total.
+
+**Key findings by occupation (NDCG@10 vs stars baseline):**
+- Highest alignment: **Executive/C-Suite** and **Legal/Finance** — loyalty-driven archetypes match BiRank's loyalty signals
+- Lowest alignment: **Student/Part-time** and **Trade/Manual** — price/convenience-driven choices diverge from behavioural ranking
+
+**Key findings by age group (NDCG@10):**
+- Gen X and Boomers show strongest model alignment — consistent with high loyalty scores from research
+- Gen Z shows weakest alignment — exploration-first behaviour is harder for a loyalty-biased model to predict
+
+**Research sources (51 cited, trust-rated):**
+
+| Domain | Key sources |
+|--------|-------------|
+| Coffee | NCA National Coffee Data Trends 2025 · Grand View Research · Mintel · Toast POS · Euromonitor |
+| Restaurants | National Restaurant Association · McKinsey · OpenTable 2026 · Deloitte · Toast · YouGov |
+| Hotels | J.D. Power Hotel Satisfaction Study · GBTA · Hilton Trends Report 2024 · Expedia Unpack · EHL |
+
+Full bibliography with trust ratings: `llm_simulation/research/bibliography.md`
+
+---
+
+### Simulation Files
+
+| File | Description |
+|------|-------------|
+| `llm_simulation/main.py` | Study 1 v1 orchestrator (gpt-4.1, baseline) |
+| `llm_simulation/main_v2.py` | Study 1 v2 orchestrator (gpt-5.4, all phases) |
+| `llm_simulation/main_study2.py` | Study 2 orchestrator (occupation × age) |
+| `llm_simulation/persona_generator.py` | 1,500 behavioural archetype personas |
+| `llm_simulation/demographic_persona_generator.py` | 1,860 cross-matrix personas |
+| `llm_simulation/demographic_profiles.py` | 31-cell profile library (research-grounded) |
+| `llm_simulation/data_loader.py` | City-matched venue loading, discriminating sets |
+| `llm_simulation/evaluator.py` | NDCG, Hit@k, Kendall τ, BH, Cohen's d, bootstrap |
+| `llm_simulation/prompts.py` | System + task prompts with archetype emphasis |
+| `llm_simulation/task_runner.py` | Async OpenAI client, SQLite cache, tiered models |
+| `llm_simulation/manipulation_check.py` | Phase 2 persona authenticity tests |
+| `llm_simulation/calibration_analysis.py` | Phase 3 revisit calibration + cross-domain |
+| `llm_simulation/second_model.py` | Claude Sonnet 4.6 replication |
+| `llm_simulation/report_generator.py` | Study 1 report generator |
+| `llm_simulation/report_study2.py` | Study 2 report generator |
+| `llm_simulation/research/` | Three research files + bibliography (51 sources) |
+| `llm_simulation/results/` | All simulation records, metrics, and reports |
+
+**Run Study 1:**
+```bash
+cd llm_simulation
+python3 main_v2.py              # full 1,500 personas
+python3 main_v2.py --dry-run    # test without API calls
+python3 main_v2.py --domain coffee  # one domain only
+```
+
+**Run Study 2:**
+```bash
+python3 main_study2.py          # full 1,860 personas
+python3 main_study2.py --dry-run
+python3 main_study2.py --occupation "Healthcare"
+```
+
+---
+
 ## Dashboard
 
-Interactive Streamlit app for exploring rankings.
+Interactive Streamlit app for exploring rankings and live persona simulation.
 
 ```bash
 python3 -m streamlit run app.py
@@ -330,6 +445,7 @@ python3 -m streamlit run app.py
 
 ### Features
 
+**Venue Explorer (Coffee / Restaurants / Hotels)**
 - **City search** with fuzzy matching ("philly" finds Philadelphia)
 - **Radius-based area filter** around any reference venue
 - **Side-by-side ranking comparison**: BiRank vs. rating vs. popularity vs. revisit rate
@@ -337,6 +453,12 @@ python3 -m streamlit run app.py
 - **Venue detail cards**: Plain-language tags (Steady / High Retention / Broad Loyalty)
 - **Interactive Folium maps** with marker popups
 - **CSV export** of results
+
+**LLM Simulation Page** (new in v8)
+- **Executive summary**: plain-English + academic framing for every reader level
+- **Results by domain**: NDCG@10, Hit@1/3, pairwise win rate, BH-corrected p-values per archetype
+- **Live Persona Chat**: pick domain, archetype, and city → `gpt-5.4-mini` generates a persona (fresh name/age/occupation each click), recommends top 3 real venues from the dataset in character, with structured venue cards showing why each matches the archetype's behavioral signal
+- **Full simulation report** embedded in dashboard
 
 See `README_dashboard.md` for full usage guide.
 
@@ -394,20 +516,46 @@ See `README_dashboard.md` for full usage guide.
 | `fsq.duckdb` | Foursquare DuckDB database |
 | `venue_linkage.csv` | Yelp-Foursquare venue matches |
 | `yelp_fsq_user_bridge.csv` | Cross-platform user bridge table |
+| `llm_simulation/results/simulation_records_v2.csv` | Study 1 — 1,500 persona records (gpt-5.4) |
+| `llm_simulation/results/simulation_metrics_v2.json` | Study 1 — NDCG, Hit@k, Kendall τ, Cohen's d per archetype |
+| `llm_simulation/results/simulation_report_v2.md` | Study 1 — full validation report with BH-corrected p-values |
+| `llm_simulation/results/simulation_records_study2.csv` | Study 2 — 1,860 persona records (occupation × age) |
+| `llm_simulation/results/study2_by_age.csv` | Study 2 — metrics by age group |
+| `llm_simulation/results/study2_by_occupation.csv` | Study 2 — metrics by occupation cluster |
+| `llm_simulation/results/study2_cross_matrix.csv` | Study 2 — NDCG heatmap (age × occupation) |
+| `llm_simulation/results/simulation_report_study2.md` | Study 2 — full cross-matrix report |
+| `llm_simulation/research/coffee_demographics_research.md` | Research: café preferences by age/occupation (16 sources) |
+| `llm_simulation/research/restaurant_demographics_research.md` | Research: restaurant preferences by age/occupation (18 sources) |
+| `llm_simulation/research/hotel_demographics_research.md` | Research: hotel preferences by age/occupation (18 sources) |
+| `llm_simulation/research/bibliography.md` | Full bibliography — 51 sources with trust ratings |
 
 ---
 
 ## Methods & References
 
+**Ranking algorithms**
 - **BiRank**: He et al. — bipartite graph ranking via mutual reinforcement
+- **ALS Matrix Factorization**: Hu et al. — implicit feedback collaborative filtering
+- **BPR**: Rendle et al. — Bayesian personalized ranking from implicit feedback
+- **Maximal Marginal Relevance**: Diversity-aware re-ranking (Carbonell & Goldstein)
+
+**Behavioral features**
 - **Burstiness Index**: Goh & Barabasi — temporal regularity of human dynamics
 - **Shannon Entropy**: Information-theoretic diversity measure
 - **Gini Coefficient**: Loyalty concentration (economics)
-- **NDCG / Hit Rate**: Standard information retrieval evaluation metrics
 - **Entropy Weight Method**: Dynamic feature weighting from decision theory
-- **Maximal Marginal Relevance**: Diversity-aware re-ranking (Carbonell & Goldstein)
-- **ALS Matrix Factorization**: Hu et al. — implicit feedback collaborative filtering
-- **BPR**: Rendle et al. — Bayesian personalized ranking from implicit feedback
+
+**Evaluation**
+- **NDCG@10 / Hit@k / Kendall τ**: Standard information retrieval metrics
+- **Wilcoxon signed-rank test + Bootstrap 95% CI**: Non-parametric significance + uncertainty
+- **Benjamini-Hochberg correction**: Multiple comparison correction across archetype groups
+- **Cohen's d + Rank-biserial correlation**: Effect size measures
+
+**LLM simulation**
+- **Persona grounding (Study 1)**: Archetypes from K-means clustering on Yelp behavioral features
+- **Persona grounding (Study 2)**: NCA 2025 · McKinsey 2026 · J.D. Power 2024 · GBTA 2024 · Hilton Trends 2024 · Expedia Unpack 2024 · Grand View Research 2024 · OpenTable 2026 · EHL Hospitality Insights · Mintel 2024 — full bibliography in `llm_simulation/research/bibliography.md`
+- **Model**: OpenAI `gpt-5.4` (pairwise + revisit) / `gpt-5.4-mini` (ranking)
+- **Replication**: Anthropic Claude Sonnet 4.6 (cross-model agreement check)
 
 ---
 
@@ -415,7 +563,9 @@ See `README_dashboard.md` for full usage guide.
 
 - Python 3.9+
 - Key packages: `streamlit`, `pandas`, `numpy`, `scipy`, `scikit-learn`, `networkx`, `folium`, `duckdb`, `pyarrow`
+- LLM simulation: `openai>=1.75.0`, `anthropic>=0.49.0`, `tqdm` (see `llm_simulation/requirements.txt`)
 - Hardware: Developed on Apple M5, 16GB RAM
+- API keys: `OPENAI_API_KEY` (required for simulation), `ANTHROPIC_API_KEY` (optional, for Claude replication) — set in `llm_simulation/.env`
 
 ---
 
