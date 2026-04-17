@@ -1554,6 +1554,57 @@ def render_hotel_dashboard(hotel_df: pd.DataFrame) -> None:
 # LLM SIMULATION PAGE
 # ============================================================================
 
+# Import Study 2 demographic profiles (age × occupation behavioral library)
+import sys as _sys
+_llm_dir = str(DATA_DIR / "llm_simulation")
+if _llm_dir not in _sys.path:
+    _sys.path.insert(0, _llm_dir)
+try:
+    from demographic_profiles import (  # type: ignore
+        PROFILES as _DEMO_PROFILES,
+        AGE_RANGES as _AGE_RANGES,
+        get_profile as _get_demo_profile,
+        get_cities as _get_demo_cities,
+        get_job_titles as _get_demo_job_titles,
+        VALID_CELLS as _VALID_CELLS,
+    )
+    _DEMO_AVAILABLE = True
+except ImportError:
+    _DEMO_AVAILABLE = False
+    _DEMO_PROFILES = {}
+    _AGE_RANGES = {}
+    _VALID_CELLS = []
+
+    def _get_demo_profile(ag, occ, domain):  # type: ignore
+        return {}
+
+    def _get_demo_cities(ag, occ):  # type: ignore
+        return []
+
+    def _get_demo_job_titles(ag, occ):  # type: ignore
+        return []
+
+# ── Demographic selector options ──────────────────────────────────────────────
+_AGE_GROUPS = [
+    "Gen Z (18-25)",
+    "Young Millennial (26-33)",
+    "Senior Millennial (34-40)",
+    "Gen X (41-56)",
+    "Boomer (57+)",
+]
+_OCCUPATION_CLUSTERS = [
+    "Tech / Software",
+    "Healthcare",
+    "Education / Academic",
+    "Creative / Media",
+    "Legal / Finance",
+    "Trade / Manual",
+    "Executive / C-Suite",
+    "Hospitality / Service",
+    "Student / Part-time",
+    "Remote / Digital Nomad",
+]
+
 # Simulation result files
 LLM_SIM_DIR = DATA_DIR / "llm_simulation" / "results"
 # Prefer v2 files (gpt-5.4 run) over v1 if they exist
@@ -1752,11 +1803,16 @@ _ARCHETYPE_WHY = {
 
 
 @st.cache_data(show_spinner=False)
-def _load_city_venues(domain: str, city: str, archetype: str, top_n: int = 3) -> list:
-    """Load top-N venues for a domain+city filtered and ranked by archetype signal."""
+def _load_city_venues(domain: str, city: str, archetype: str, top_n: int = 3,
+                      override_sort_col: str = "") -> list:
+    """Load top-N venues for a domain+city filtered and ranked by archetype/demographic signal."""
     import pandas as _pd  # noqa: PLC0415
 
-    sort_col, ascending = _ARCHETYPE_SORT.get(archetype, ("stars", False))
+    # Demographic sort_col takes priority over archetype sort_col
+    if override_sort_col and override_sort_col != "stars":
+        sort_col, ascending = override_sort_col, False
+    else:
+        sort_col, ascending = _ARCHETYPE_SORT.get(archetype, ("stars", False))
 
     try:
         if domain == "coffee":
@@ -1860,8 +1916,10 @@ def _call_persona_chat(
     city: str,
     rand_seed: int = 0,
     venues: list = None,
+    age_group: str = "",
+    occupation_cluster: str = "",
 ) -> dict:
-    """Call OpenAI and return a persona card, preference response, and venue recommendations."""
+    """Generate a persona that is shaped by BOTH archetype AND age+occupation demographics."""
     try:
         import openai  # noqa: PLC0415
     except ImportError:
@@ -1870,25 +1928,48 @@ def _call_persona_chat(
     import random as _random  # noqa: PLC0415
     rng = _random.Random(rand_seed)
 
+    # ── Names ─────────────────────────────────────────────────────────────────
     first_names = ["Alex", "Jordan", "Morgan", "Taylor", "Casey", "Riley", "Avery", "Quinn",
                    "Sam", "Jamie", "Priya", "Omar", "Luca", "Nadia", "Rafael", "Mei",
-                   "Isaac", "Sofia", "Dev", "Leila", "Marcus", "Yuna", "Tobias", "Ingrid"]
+                   "Isaac", "Sofia", "Dev", "Leila", "Marcus", "Yuna", "Tobias", "Ingrid",
+                   "Zara", "Milo", "Layla", "Phoenix", "River", "Remy"]
     last_names = ["Chen", "Osei", "Mitchell", "Rivera", "Kim", "Patel", "Nguyen", "Schmidt",
-                  "Lopez", "Williams", "Torres", "Park", "Hansen", "Müller", "Silva", "Rossi"]
-    occupations = [
-        "UX Designer", "Marketing Manager", "Secondary School Teacher", "Software Engineer",
-        "Nurse", "Journalist", "Chef", "Architect", "Management Consultant", "PhD Student",
-        "Financial Analyst", "Graphic Designer", "Project Manager", "Sales Manager",
-        "Barista", "HR Specialist", "Data Scientist", "Real Estate Agent",
-    ]
-
+                  "Lopez", "Williams", "Torres", "Park", "Hansen", "Müller", "Silva", "Rossi",
+                  "O'Brien", "Johansson", "Garcia", "Thompson"]
     name = f"{rng.choice(first_names)} {rng.choice(last_names)}"
-    age = rng.randint(22, 57)
-    occ = rng.choice(occupations)
-    desc = _ARCHETYPE_DESCRIPTIONS.get(archetype, "A typical venue visitor.")
+
+    # ── Age — use demographic range if available ───────────────────────────────
+    if age_group and _DEMO_AVAILABLE and age_group in _AGE_RANGES:
+        lo, hi = _AGE_RANGES[age_group]
+        age = rng.randint(lo, hi)
+    else:
+        age = rng.randint(22, 57)
+
+    # ── Occupation — use demographic job titles if available ──────────────────
+    if occupation_cluster and _DEMO_AVAILABLE:
+        job_titles = _get_demo_job_titles(age_group, occupation_cluster)
+        occ = rng.choice(job_titles) if job_titles else occupation_cluster
+    else:
+        occ = rng.choice([
+            "UX Designer", "Marketing Manager", "Software Engineer", "Nurse",
+            "Journalist", "Architect", "Management Consultant", "PhD Student",
+            "Financial Analyst", "Graphic Designer", "Data Scientist",
+        ])
+
+    # ── Behavioral profiles — layer archetype + demographic ───────────────────
+    archetype_desc = _ARCHETYPE_DESCRIPTIONS.get(archetype, "A typical venue visitor.")
+
+    demo_profile_text = ""
+    demo_task = ""
+    if age_group and occupation_cluster and _DEMO_AVAILABLE:
+        demo_cell = _get_demo_profile(age_group, occupation_cluster, domain)
+        if demo_cell:
+            demo_profile_text = demo_cell.get("profile", "")
+            demo_task = demo_cell.get("task", "")
+
     d_label = {"coffee": "coffee shop", "restaurant": "restaurant", "hotel": "hotel"}[domain]
 
-    # Build venue context for the recommendation prompt
+    # ── Venue context ─────────────────────────────────────────────────────────
     venues = venues or []
     if venues:
         venue_lines = "\n".join(
@@ -1898,27 +1979,36 @@ def _call_persona_chat(
             for i, v in enumerate(venues)
         )
         rec_instruction = (
-            f"\n\nYou have been recommended the following top {d_label}s in {city} "
-            f"based on your behavioural profile:\n{venue_lines}\n\n"
-            f"In 4–6 sentences, tell me why you personally would choose these places, "
-            f"mentioning each one by name in the natural flow of your answer. "
-            f"Be specific — explain what about each place fits your habits."
+            f"\n\nYou have been recommended these top {d_label}s in {city} "
+            f"based on your specific profile:\n{venue_lines}\n\n"
+            f"In 4–6 sentences, explain why you personally would choose these places, "
+            f"mentioning each by name. Be very specific — your age, job, and daily patterns "
+            f"should come through in exactly why each place suits you."
         )
     else:
         rec_instruction = (
-            f"\n\nDescribe in 3–5 sentences what kind of {d_label} in {city} "
-            f"suits you best and why, based on your typical habits."
+            f"\n\nIn 3–5 sentences, describe what kind of {d_label} in {city} "
+            f"suits you best, given your job, age, and typical routine."
         )
+
+    # System prompt layers archetype + demographic profile for maximum specificity
+    profile_block = archetype_desc
+    if demo_profile_text:
+        profile_block = (
+            f"{archetype_desc}\n\n"
+            f"More specifically, as a {age}-year-old {occ}: {demo_profile_text}"
+        )
+
+    situation = demo_task if demo_task else f"You're looking for a {d_label} in {city}."
 
     system_prompt = (
         f"You are {name}, a {age}-year-old {occ} living in {city}.\n\n"
-        f"Your behavioural profile: {desc}\n\n"
-        "Stay fully in character. Answer in first person, naturally and conversationally. "
-        "Do not mention AI, simulations, or break character."
+        f"{profile_block}\n\n"
+        "Be very specific to your age and job. A student responds differently from an executive, "
+        "a nurse differently from a software engineer — even if both are 'Loyalists'. "
+        "Answer in first person, naturally. Do not mention AI or simulations."
     )
-    user_prompt = (
-        f"Tell me about your {d_label} habits in {city}.{rec_instruction}"
-    )
+    user_prompt = f"Situation: {situation}{rec_instruction}"
 
     try:
         client = openai.OpenAI(api_key=api_key)
@@ -1928,7 +2018,7 @@ def _call_persona_chat(
                 {"role": "system", "content": system_prompt},
                 {"role": "user",   "content": user_prompt},
             ],
-            max_completion_tokens=340,
+            max_completion_tokens=380,
             temperature=0.92,
         )
         text = response.choices[0].message.content or ""
@@ -1937,6 +2027,7 @@ def _call_persona_chat(
 
     return {
         "name": name, "age": age, "occupation": occ,
+        "age_group": age_group, "occupation_cluster": occupation_cluster,
         "archetype": archetype, "response": text, "venues": venues,
     }
 
@@ -2042,6 +2133,117 @@ to rank venues and choose between the model's top pick vs. the star-rating top p
 
     st.markdown("---")
 
+    # ── Section 2b: Study 2 — Occupation × Age Cross-Matrix ──────────────────
+    st.markdown("### Study 2 — Occupation × Age Demographics")
+    st.caption(
+        "1,860 personas across 5 age groups × 10 occupation clusters × 3 domains, "
+        "grounded in 51 published consumer-behaviour sources (NCA, McKinsey, J.D. Power, GBTA, Hilton Trends, etc.)"
+    )
+
+    s2_records_path = LLM_SIM_DIR / "simulation_records_study2.csv"
+    s2_age_path     = LLM_SIM_DIR / "study2_by_age.csv"
+    s2_occ_path     = LLM_SIM_DIR / "study2_by_occupation.csv"
+    s2_matrix_path  = LLM_SIM_DIR / "study2_cross_matrix.csv"
+
+    if not s2_records_path.exists():
+        st.info("Study 2 results not found. Run `llm_simulation/main_study2.py` to generate them.")
+    else:
+        s2_records = safe_read_csv(s2_records_path)
+
+        # ── Overview numbers ──────────────────────────────────────────────────
+        if not s2_records.empty:
+            s2_c1, s2_c2, s2_c3, s2_c4 = st.columns(4)
+            overall_ndcg  = s2_records["ndcg"].mean()
+            overall_stars = s2_records["stars_ndcg"].mean() if "stars_ndcg" in s2_records.columns else 0
+            win_rate = s2_records["pairwise_win"].mean() if "pairwise_win" in s2_records.columns else 0
+            s2_c1.metric("Total Personas", f"{len(s2_records):,}")
+            s2_c2.metric("Overall NDCG@10", f"{overall_ndcg:.4f}",
+                         delta=f"Δ vs Stars: {overall_ndcg - overall_stars:+.4f}")
+            s2_c3.metric("Pairwise Win Rate", f"{win_rate:.1%}")
+            s2_c4.metric("Age Groups × Occupations",
+                         f"{s2_records['age_group'].nunique()} × {s2_records['occupation'].nunique()}"
+                         if "age_group" in s2_records.columns else "5 × 10")
+
+        # ── Tabs: Age | Occupation | Cross-Matrix ─────────────────────────────
+        s2_tab1, s2_tab2, s2_tab3 = st.tabs(["By Age Group", "By Occupation", "Cross-Matrix Heatmap"])
+
+        with s2_tab1:
+            if s2_age_path.exists():
+                age_df = safe_read_csv(s2_age_path)
+                if not age_df.empty:
+                    # bar chart
+                    if "age_group" in age_df.columns and "ndcg_mean" in age_df.columns:
+                        age_order = ["Gen Z (18-25)", "Young Millennial (26-33)",
+                                     "Senior Millennial (34-40)", "Gen X (41-56)", "Boomer (57+)"]
+                        age_df["_order"] = age_df["age_group"].map(
+                            {a: i for i, a in enumerate(age_order)}
+                        ).fillna(99)
+                        age_df = age_df.sort_values("_order").drop(columns=["_order"])
+                        chart_data = age_df.set_index("age_group")[["ndcg_mean", "stars_ndcg_mean"]].rename(
+                            columns={"ndcg_mean": "Behavioural Model", "stars_ndcg_mean": "Star Ratings"}
+                        ) if "stars_ndcg_mean" in age_df.columns else age_df.set_index("age_group")[["ndcg_mean"]]
+                        st.bar_chart(chart_data)
+                    st.dataframe(age_df, use_container_width=True, hide_index=True)
+            elif not s2_records.empty and "age_group" in s2_records.columns:
+                age_summary = (
+                    s2_records.groupby("age_group")
+                    .agg(n=("ndcg", "count"),
+                         ndcg_mean=("ndcg", "mean"),
+                         stars_ndcg=("stars_ndcg", "mean"),
+                         win_rate=("pairwise_win", "mean"))
+                    .reset_index()
+                )
+                age_summary["Δ vs Stars"] = age_summary["ndcg_mean"] - age_summary["stars_ndcg"]
+                st.bar_chart(age_summary.set_index("age_group")["ndcg_mean"])
+                st.dataframe(age_summary.round(4), use_container_width=True, hide_index=True)
+
+        with s2_tab2:
+            if s2_occ_path.exists():
+                occ_df = safe_read_csv(s2_occ_path)
+                if not occ_df.empty:
+                    if "occupation" in occ_df.columns and "ndcg_mean" in occ_df.columns:
+                        occ_df = occ_df.sort_values("ndcg_mean", ascending=False)
+                        chart_data = occ_df.set_index("occupation")[["ndcg_mean", "stars_ndcg_mean"]].rename(
+                            columns={"ndcg_mean": "Behavioural Model", "stars_ndcg_mean": "Star Ratings"}
+                        ) if "stars_ndcg_mean" in occ_df.columns else occ_df.set_index("occupation")[["ndcg_mean"]]
+                        st.bar_chart(chart_data)
+                    st.dataframe(occ_df, use_container_width=True, hide_index=True)
+            elif not s2_records.empty and "occupation" in s2_records.columns:
+                occ_summary = (
+                    s2_records.groupby("occupation")
+                    .agg(n=("ndcg", "count"),
+                         ndcg_mean=("ndcg", "mean"),
+                         stars_ndcg=("stars_ndcg", "mean"),
+                         win_rate=("pairwise_win", "mean"))
+                    .reset_index()
+                    .sort_values("ndcg_mean", ascending=False)
+                )
+                st.bar_chart(occ_summary.set_index("occupation")["ndcg_mean"])
+                st.dataframe(occ_summary.round(4), use_container_width=True, hide_index=True)
+
+        with s2_tab3:
+            if s2_matrix_path.exists():
+                matrix_df = safe_read_csv(s2_matrix_path)
+                if not matrix_df.empty:
+                    st.caption("NDCG@10 per age group × occupation cell. Higher = behavioural model aligns more strongly with persona preferences.")
+                    st.dataframe(matrix_df, use_container_width=True)
+            elif not s2_records.empty and "age_group" in s2_records.columns and "occupation" in s2_records.columns:
+                pivot = s2_records.pivot_table(
+                    values="ndcg", index="age_group", columns="occupation", aggfunc="mean"
+                ).round(4)
+                st.caption("NDCG@10 heatmap — age group × occupation. Higher = stronger model alignment.")
+                st.dataframe(pivot, use_container_width=True)
+
+        # ── Study 2 full report ───────────────────────────────────────────────
+        s2_report_path = LLM_SIM_DIR / "simulation_report_study2.md"
+        with st.expander("Study 2 Full Report", expanded=False):
+            if s2_report_path.exists():
+                st.markdown(s2_report_path.read_text(encoding="utf-8"))
+            else:
+                st.info("Run main_study2.py to generate the full report.")
+
+    st.markdown("---")
+
     # ── Section 3: Live Persona Chat ──────────────────────────────────────────
     st.markdown("### Live Persona Chat")
     st.caption(
@@ -2057,6 +2259,7 @@ to rank venues and choose between the model's top pick vs. the star-rating top p
             "`llm_simulation/.env`. Showing example output below."
         )
 
+    # ── Row 1: Domain, Archetype, Age Group ──────────────────────────────────
     chat_col1, chat_col2, chat_col3 = st.columns(3)
     with chat_col1:
         chat_domain = st.selectbox(
@@ -2066,20 +2269,59 @@ to rank venues and choose between the model's top pick vs. the star-rating top p
             key="llm_chat_domain",
         )
     with chat_col2:
-        # Filter archetypes to those in the chosen domain
         domain_arch_map = _domain_archetypes(records)
         available_archetypes = domain_arch_map.get(chat_domain, list(_ARCHETYPE_DESCRIPTIONS.keys()))
         chat_archetype = st.selectbox(
-            "Archetype",
+            "Behavioural Archetype",
             available_archetypes,
             key="llm_chat_archetype",
         )
     with chat_col3:
-        chat_city = st.selectbox(
-            "City",
-            ["Philadelphia", "New York", "Las Vegas", "Chicago", "Nashville", "New Orleans", "Seattle", "Austin"],
-            key="llm_chat_city",
+        chat_age_group = st.selectbox(
+            "Age Group",
+            _AGE_GROUPS,
+            index=0,
+            key="llm_chat_age_group",
         )
+
+    # ── Row 2: Occupation, City ───────────────────────────────────────────────
+    chat_col4, chat_col5 = st.columns(2)
+    with chat_col4:
+        chat_occupation = st.selectbox(
+            "Occupation",
+            _OCCUPATION_CLUSTERS,
+            key="llm_chat_occupation",
+        )
+    with chat_col5:
+        # Use occupation-appropriate cities if demographic data available
+        demo_cities = _get_demo_cities(chat_age_group, chat_occupation) if _DEMO_AVAILABLE else []
+        default_cities = demo_cities if demo_cities else [
+            "Philadelphia", "Nashville", "Las Vegas", "New Orleans",
+            "Tampa", "Pittsburgh", "Cleveland", "Charlotte",
+        ]
+        # Deduplicate and keep order
+        seen, city_opts = set(), []
+        for c in default_cities + ["Philadelphia", "Nashville", "Las Vegas", "New Orleans",
+                                    "Tampa", "Pittsburgh", "Cleveland", "Charlotte",
+                                    "Indianapolis", "Cincinnati", "Louisville", "St. Louis"]:
+            if c not in seen:
+                city_opts.append(c)
+                seen.add(c)
+        chat_city = st.selectbox("City", city_opts, key="llm_chat_city")
+
+    # ── Demographic insight caption ────────────────────────────────────────────
+    if _DEMO_AVAILABLE:
+        demo_cell = _get_demo_profile(chat_age_group, chat_occupation, chat_domain)
+        if demo_cell:
+            sort_label = demo_cell.get("sort_col", "").replace("_", " ")
+            loyalty = demo_cell.get("loyalty_score", 3)
+            price = demo_cell.get("price_sens", 3)
+            loyalty_str = ["", "Explorer", "Low loyalty", "Balanced", "Loyal", "Very loyal"][loyalty]
+            price_str = ["", "Low sensitivity", "Low-moderate", "Moderate", "Moderate-high", "High"][price]
+            st.caption(
+                f"**{chat_age_group} · {chat_occupation}** — "
+                f"Key venue signal: `{sort_label}` · Loyalty: {loyalty_str} · Price sensitivity: {price_str}"
+            )
 
     generate_clicked = st.button(
         "Generate Persona" if has_key else "Generate Persona (demo)",
@@ -2094,18 +2336,48 @@ to rank venues and choose between the model's top pick vs. the star-rating top p
     rand_seed = st.session_state.get("llm_persona_rand", 0)
 
     if generate_clicked:
-        # Load city-matched, archetype-ranked venues from real data
-        venues = _load_city_venues(chat_domain, chat_city, chat_archetype, top_n=3)
+        # Get demographic sort_col to rank venues by what THIS age×occupation cares about
+        demo_sort_col = ""
+        if _DEMO_AVAILABLE:
+            demo_cell = _get_demo_profile(chat_age_group, chat_occupation, chat_domain)
+            demo_sort_col = demo_cell.get("sort_col", "") if demo_cell else ""
+
+        venues = _load_city_venues(
+            chat_domain, chat_city, chat_archetype, top_n=3,
+            override_sort_col=demo_sort_col,
+        )
+
+        # Update venue "why" label to reflect demographic signal, not just archetype
+        if demo_sort_col and venues:
+            _DEMO_WHY = {
+                "revisit_rate":           "High return-visitor rate — fits your loyalty pattern",
+                "temporal_stability":     "Consistent daily traffic — reliable for your schedule",
+                "unique_users":           "Broad appeal — suits your exploratory style",
+                "stars":                  "Top-rated — safe, trusted choice",
+                "repeat_user_rate":       "Strong repeat customers — matches your loyalty habits",
+                "popularity":             "High footfall — popular with your peer group",
+                "avg_rating":             "Highly rated — reliable quality",
+                "peak_busyness":          "Buzzy at peak times — suits your lifestyle",
+                "business_leisure_ratio": "Business-oriented — professional atmosphere",
+                "geographic_diversity":   "Draws visitors from far — destination quality",
+                "multi_stay_rate":        "Unusually high return rate — genuinely worth it",
+            }
+            why_label = _DEMO_WHY.get(demo_sort_col, _ARCHETYPE_WHY.get(chat_archetype, "Top pick"))
+            venues = [{**v, "why": why_label} for v in venues]
 
         if has_key:
-            with st.spinner("Generating persona via gpt-5.4-mini…"):
+            with st.spinner(f"Generating {chat_age_group} {chat_occupation} persona…"):
                 result = _call_persona_chat(
                     api_key, chat_archetype, chat_domain, chat_city,
                     rand_seed=rand_seed, venues=venues,
+                    age_group=chat_age_group,
+                    occupation_cluster=chat_occupation,
                 )
         else:
             result = _EXAMPLE_PERSONA_OUTPUT.get(chat_domain, _EXAMPLE_PERSONA_OUTPUT["coffee"])
             result["venues"] = venues
+            result["age_group"] = chat_age_group
+            result["occupation_cluster"] = chat_occupation
 
         st.session_state["llm_last_result"] = result
 
@@ -2122,8 +2394,9 @@ to rank venues and choose between the model's top pick vs. the star-rating top p
                 with pc1:
                     st.markdown("**Persona Card**")
                     st.markdown(f"**Name:** {result.get('name', '—')}")
-                    st.markdown(f"**Age:** {result.get('age', '—')}")
-                    st.markdown(f"**Occupation:** {result.get('occupation', '—')}")
+                    st.markdown(f"**Age:** {result.get('age', '—')} · {result.get('age_group', '')}")
+                    st.markdown(f"**Job:** {result.get('occupation', '—')}")
+                    st.markdown(f"**Sector:** {result.get('occupation_cluster', '')}")
                     st.markdown(f"**Archetype:** `{result.get('archetype', chat_archetype)}`")
                 with pc2:
                     arch = result.get("archetype", chat_archetype)
