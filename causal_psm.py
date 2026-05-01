@@ -39,7 +39,7 @@ def fit_propensity_model(df: pd.DataFrame, confounder_cols: list) -> pd.DataFram
 
     ps = model.predict_proba(X)[:, 1]
     eps = 1e-10
-    logit_ps = np.log(ps / (1 - ps + eps))
+    logit_ps = np.log((ps + eps) / (1 - ps + eps))
 
     df["propensity_score"] = np.nan
     df["logit_propensity"] = np.nan

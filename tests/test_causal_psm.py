@@ -11,6 +11,7 @@ from causal_psm import (
     compute_smd,
     estimate_ate,
     mahalanobis_match,
+    build_balance_table,
 )
 
 CONFOUNDER_COLS = ["total_visits", "unique_users", "gini_user_contribution"]
@@ -131,3 +132,18 @@ def test_mahalanobis_match_no_duplicate_controls():
     df = make_psm_df(n=100)
     pairs = mahalanobis_match(df, CONFOUNDER_COLS)
     assert pairs["control_id"].nunique() == len(pairs)
+
+
+def test_build_balance_table_columns():
+    df = fit_propensity_model(make_psm_df(), CONFOUNDER_COLS)
+    pairs = nearest_neighbour_match(df)
+    table = build_balance_table(df, pairs, CONFOUNDER_COLS)
+    assert set(table.columns) == {"confounder", "smd_before", "smd_after", "balanced"}
+
+
+def test_build_balance_table_balanced_flag():
+    df = fit_propensity_model(make_psm_df(), CONFOUNDER_COLS)
+    pairs = nearest_neighbour_match(df)
+    table = build_balance_table(df, pairs, CONFOUNDER_COLS)
+    for _, row in table.iterrows():
+        assert row["balanced"] == (row["smd_after"] < 0.1)
