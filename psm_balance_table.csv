@@ -1,0 +1,4 @@
+confounder,smd_before,smd_after,balanced
+total_visits,0.3495,0.064,True
+unique_users,0.4283,0.0761,True
+gini_user_contribution,0.068,0.006,True
