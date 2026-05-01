@@ -1,0 +1,30 @@
+=================================================================
+COLD-START VALIDATION REPORT
+Baseline NDCG@10 (v5_combined): 0.0765
+=================================================================
+
+--- 1. COVERAGE GAIN ---
+  Total venues:     8,509
+  BiRank (warm):    7,389  (86.8%)
+  Cold-start:       1,045  (+12.3% gain)
+  Unranked:         75
+  TOTAL COVERAGE:   99.1%  (+12.3%)
+
+--- 2. CALIBRATION QUALITY (per threshold) ---
+   Threshold    Spearman r    LightGBM r   Coverage gain
+           3        0.6237        0.7626            0.0%  ✓
+           5        0.6237        0.7626            0.0%  ✓
+          10        0.6239        0.7548            2.3%  ✓
+          20        0.6071        0.7322           12.3%  ✓
+
+--- 3. RANKING PRESERVATION ---
+  Guaranteed: True
+  Warm venue BiRank scores are not modified by the cold-start module. score_source='birank' rows are identical to v5_combined output. Filter to score_source='birank' to reproduce v5 NDCG@10 exactly.
+
+--- 4. ABLATION TABLE ---
+ threshold  spearman_r  coverage_gain_pct  ndcg10_preserved  valid_threshold
+         3    0.623739               0.00            0.0765             True
+         5    0.623739               0.00            0.0765             True
+        10    0.623890               2.26            0.0765             True
+        20    0.607133              12.28            0.0765             True
+=================================================================
