@@ -1,0 +1,48 @@
+======================================================================
+CAUSAL ANALYSIS REPORT — DIRECTION 5
+Propensity Score Matching: Temporal Consistency -> Future Revisit Rate
+======================================================================
+
+--- STUDY DESIGN ---
+Treatment: consistency_score = weekday_ratio - minmax_norm(peak_hour_entropy)
+           Binary split at median (top half = treated)
+Outcome:   future_revisit_rate (fraction of pre-2020 users returning post-2020)
+Method:    1:1 nearest-neighbour PSM, caliper = 0.2 x SD(logit propensity)
+Confounders: total_visits, unique_users, gini_user_contribution
+Temporal split: 2020-01-01
+
+--- SAMPLE ---
+  Total eligible venues:      7,853
+  Treated (high consistency): 3,855
+  Control (low consistency):  3,998
+  Matched pairs:              2,957
+  Excluded (outside caliper): 898
+
+--- COVARIATE BALANCE (Austin 2011: SMD < 0.1 = well-balanced) ---
+  Confounder                       SMD Before    SMD After   Balanced
+  total_visits                         0.3495       0.0640        YES
+  unique_users                         0.4283       0.0761        YES
+  gini_user_contribution               0.0680       0.0060        YES
+  Overall: All well-balanced (SMD < 0.1)
+
+--- PSM RESULTS ---
+  ATE  = +0.000986
+  95% CI [-0.000380, +0.002352]  (n_bootstrap=1000)
+  p    = 0.1515  (not significant at alpha=0.05)
+  n    = 2,957 matched pairs
+
+  INTERPRETATION: A small positive directional effect is observed (ATE=+0.0010), but it does not reach statistical significance (p=0.1515). This may reflect reduced statistical power due to COVID-19 disruption at the 2020 split: most venues have future_revisit_rate=0, compressing the outcome variance.
+
+--- ROBUSTNESS CHECK (Mahalanobis distance matching) ---
+  ATE  = +0.000669
+  95% CI [-0.000366, +0.001887]
+  p    = 0.2295  (not significant)
+  Robust to matching method: YES
+  (PSM and Mahalanobis ATEs overlap within each other's 95% CIs)
+
+--- THESIS CITATION GUIDE ---
+  PSM method: Rosenbaum & Rubin (1983); Austin (2011) for SMD balance check
+  Caliper: 0.2 x SD of logit propensity (Austin 2011 recommendation)
+  Bootstrap CI: 1,000 resamples of matched pairs
+  Mahalanobis: sensitivity analysis for matching-method dependence
+======================================================================
