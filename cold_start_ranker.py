@@ -104,6 +104,13 @@ def percentile_normalize(pseudo_scores: np.ndarray, reference_scores: np.ndarray
     """
     if len(pseudo_scores) == 0:
         return pseudo_scores
+    if len(reference_scores) < 2:
+        warnings.warn(
+            f"percentile_normalize: reference_scores has {len(reference_scores)} element(s); "
+            "returning pseudo_scores unchanged.",
+            UserWarning,
+        )
+        return pseudo_scores
 
     n = len(pseudo_scores)
     ranks = pseudo_scores.argsort().argsort()
@@ -127,6 +134,8 @@ def select_best_threshold(
       spearman_r >= spearman_floor  AND  ndcg10 >= baseline_ndcg * (1 - ndcg_tolerance)
     Falls back to highest spearman_r if no threshold meets both criteria.
     """
+    if not results:
+        raise ValueError("No threshold results available — all thresholds were skipped.")
     ndcg_min = baseline_ndcg * (1 - ndcg_tolerance)
     valid = [r for r in results
              if r["spearman_r"] >= spearman_floor and r["ndcg10"] >= ndcg_min]
@@ -156,11 +165,12 @@ def run_threshold_sweep(df: pd.DataFrame, baseline_ndcg: float = 0.0765) -> list
         print(f"\n  Threshold = {threshold} reviews...")
         warm, cold = split_warm_cold(df, threshold, FEATURE_COLS)
 
-        if len(warm) < 20:
-            print(f"    Too few warm venues ({len(warm)}) — skipping")
+        warm_scored = warm.dropna(subset=["birank_score"])
+        if len(warm_scored) < 20:
+            print(f"    Too few warm venues with birank_score ({len(warm_scored)}) — skipping")
             continue
 
-        model_result = train_calibration_model(warm, FEATURE_COLS)
+        model_result = train_calibration_model(warm_scored, FEATURE_COLS)
         spearman_r = model_result["spearman_r"]
         lgbm_r = model_result["lgbm_r"]
 
@@ -171,7 +181,7 @@ def run_threshold_sweep(df: pd.DataFrame, baseline_ndcg: float = 0.0765) -> list
         print(f"    Warm: {len(warm):,}  Cold: {len(cold):,}  "
               f"Rescued: {n_rescued:,}  Coverage gain: +{coverage_gain_pct}%")
         print(f"    Ridge Spearman r = {spearman_r:.4f}"
-              + (f"  |  LightGBM r = {lgbm_r:.4f}" if lgbm_r else ""))
+              + (f"  |  LightGBM r = {lgbm_r:.4f}" if lgbm_r is not None else ""))
 
         results.append({
             "threshold":         threshold,
@@ -222,6 +232,9 @@ if __name__ == "__main__":
     print("\nRunning threshold sweep [3, 5, 10, 20]...")
     results = run_threshold_sweep(df)
 
+    if not results:
+        print("No valid thresholds found. Cannot generate cold-start scores.")
+        import sys; sys.exit(1)
     sweep_out = [{k: v for k, v in r.items() if k != "model"} for r in results]
     sweep_df = pd.DataFrame(sweep_out)
     sweep_df.to_csv(DATA_DIR / "cold_start_threshold_sweep.csv", index=False)
