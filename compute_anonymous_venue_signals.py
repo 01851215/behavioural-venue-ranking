@@ -19,15 +19,13 @@ VENUE_FEATURES_PATH = DATA_DIR / "coffee_venue_features_v2.csv"
 
 
 def compute_checkin_burstiness(timestamps) -> float:
-    """CV of daily check-in counts. NaN if fewer than 2 check-ins total.
-    If all check-ins fall on a single day, returns total count as a high-burstiness sentinel."""
+    """CV of daily check-in counts. NaN if only 1 active day."""
     if len(timestamps) < 2:
         return np.nan
     series = pd.Series(timestamps)
     daily = series.dt.date.value_counts()
     if len(daily) < 2:
-        # All check-ins on one day — maximally bursty; return total count as proxy
-        return float(len(timestamps))
+        return np.nan
     return daily.std() / daily.mean() if daily.mean() > 0 else np.nan
 
 
@@ -133,7 +131,8 @@ def load_checkin_data(path: Path) -> dict:
         for line in f:
             row = json.loads(line)
             bid = row["business_id"]
-            timestamps = pd.to_datetime(row["date"].split(", "))
+            timestamps = pd.to_datetime(row["date"].split(", "), errors="coerce")
+            timestamps = timestamps.dropna()
             checkins[bid] = list(timestamps)
     print(f"  Loaded {len(checkins):,} venues, parsing timestamps done.")
     return checkins
@@ -169,7 +168,7 @@ def enrich_venue_features(venue_features_path: Path, anon_features: pd.DataFrame
         how="left",
     )
     print(f"  Venue features: {len(existing):,} rows merged with anon signals")
-    print(f"  Coverage: {anon_features['business_id'].isin(existing['business_id']).sum():,} "
+    print(f"  Coverage: {existing['business_id'].isin(anon_features['business_id']).sum():,} "
           f"of {len(existing):,} coffee venues have check-in data")
     return merged
 

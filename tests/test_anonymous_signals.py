@@ -32,12 +32,18 @@ def test_burstiness_uniform_is_low():
     assert b < 0.5, f"Expected low burstiness for uniform, got {b}"
 
 def test_burstiness_spiky_is_high():
-    ts = make_timestamps([9] * 10, [0] * 10)
+    ts = make_timestamps([9] * 10, [0, 0, 0, 0, 0, 10, 20, 30, 40, 50])
     b = compute_checkin_burstiness(ts)
     assert b > 0.5, f"Expected high burstiness for spiky, got {b}"
 
 def test_burstiness_single_day_is_nan():
     ts = make_timestamps([9], [0])
+    b = compute_checkin_burstiness(ts)
+    assert np.isnan(b)
+
+def test_burstiness_single_day_multi_visit_is_nan():
+    # Multiple visits all on the same day — still NaN (CV undefined for 1 active day)
+    ts = make_timestamps([9, 10, 11], [0, 0, 0])
     b = compute_checkin_burstiness(ts)
     assert np.isnan(b)
 
