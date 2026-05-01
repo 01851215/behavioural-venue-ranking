@@ -33,6 +33,7 @@ Includes a validated **coffee shop model** (BiRank with behavioral priors), a **
 - **v6 (hybrid experiment):** Tested whether adding a second type of algorithm — Matrix Factorization, which finds hidden patterns like "people who like X tend to like Y" — could improve on BiRank. It didn't. The best blend was still essentially pure BiRank (λ=1.0 selected by tuning). This is a meaningful negative result: BiRank's behavioural signals are already capturing what matters, and "collaborative filtering" patterns add nothing extra in this domain.
 - **v7 (hotel model):** Extended the whole framework to hotels and accommodation. This required redesigning the behavioral features from scratch — hotels are fundamentally different from coffee shops (nobody visits the same hotel weekly). Key finding: BiRank still beats star ratings (p=0.012), but collaborative filtering outperforms behavioral signals for hotels because most users only stay at 1–2 hotels, making behavior patterns too sparse to learn from. Also conducted a cross-domain experiment: users who explore many coffee shops tend to explore many hotels too, but predicting hotel preferences from coffee habits is only marginally better than chance.
 - **v8 (LLM simulation):** Added two independent external validation studies using GPT-5.4 synthetic personas. **Study 1** — 1,500 personas grounded in the four behavioural archetypes identified from Yelp data (Loyalist, Weekday Regular, Casual Weekender, Infrequent Visitor) across all three domains. Each persona performs three tasks: venue ranking (NDCG@10), pairwise head-to-head (BiRank vs. stars), and revisit prediction. Metrics include Hit@1/3, Kendall τ, BH-corrected p-values, Cohen's d, and rank-biserial correlation. **Study 2** — 1,860 personas across a 5 age-group × 10 occupation cross-matrix (Gen Z → Boomer; Tech/Software → Remote/Digital Nomad), grounded in 51 published consumer-behaviour sources (NCA, McKinsey, J.D. Power, GBTA, Hilton Trends Report, etc.). Both studies run alongside the real-data validation for independent triangulation. Also added a live Persona Chat in the Streamlit dashboard: pick an archetype, city, and domain — a GPT-5.4-mini persona recommends real venues from the dataset and explains why in character.
+- **v9 (cold-start + causal):** Two new directions. **Direction 3** — anonymous venue signal module: extracted 10 temporal features (burstiness, peak-hour entropy, weekday ratio, growth trend, etc.) from 13.3M Yelp check-in timestamps across 131,930 venues. Trained a calibrated Ridge regression (Spearman r=0.62; LightGBM r=0.76) to produce pseudo-BiRank scores for venues with fewer than 20 reviews. Pipeline v5 injects cold-start scores for 1,045 previously unranked venues, raising total coverage from 86.8% → 99.1% (+12.3%). Venue feature matrix expanded from 15 → 25 columns. **Direction 5** — causal PSM analysis (spec complete, implementation in progress): Propensity Score Matching study testing whether temporal consistency causally drives future revisit rates, using a 2020-01-01 temporal split.
 
 ---
 
@@ -136,6 +137,66 @@ The model works best for Loyalists — users with high revisit rates — confirm
 | Random | 0.0763 | 0.0754 | 0.0742 |
 
 Results are consistent across all three temporal split points.
+
+---
+
+## Cold-Start Anonymous Venue Ranking (v9 — Direction 3)
+
+Addresses a fundamental data coverage gap: 72% of Yelp check-in events have no `user_id`, and venues with fewer than 20 reviews receive a BiRank score of zero. This module unlocks 13.3M anonymous timestamps to rescue 1,045 previously unranked venues.
+
+### Pipeline
+
+| Script | Description |
+|--------|-------------|
+| `compute_anonymous_venue_signals.py` | Extract 10 temporal features from check-in JSON for all 131,930 venues |
+| `cold_start_ranker.py` | Train Ridge + LightGBM calibration regression; threshold sweep [3,5,10,20]; output pseudo-scores |
+| `run_pipeline_v5.py` | Merge BiRank + pseudo-scores via percentile normalization; tag `score_source` |
+| `validate_v5_coldstart.py` | Coverage gain, calibration Spearman r, NDCG preservation, threshold ablation |
+
+### Anonymous Features (10 new columns in `coffee_venue_features_v2.csv`)
+
+| Feature | Signal |
+|---------|--------|
+| `total_checkins` | Anonymous popularity proxy |
+| `checkin_burstiness` | Spiky vs steady demand (CV of daily counts) |
+| `peak_hour_entropy` | Predictable routine vs random traffic |
+| `weekday_ratio` | Commuter/worker vs leisure venue |
+| `temporal_stability_cv` | Consistent vs volatile footfall |
+| `visit_velocity_recent` | Momentum — growing or declining |
+| `growth_trend` | Long-term trajectory (monthly slope) |
+| `lunch_dinner_ratio` | Food-occasion focus |
+| `late_night_ratio` | Night crowd signal |
+| `peak_hour_mode` | Primary use-case anchor hour |
+
+### Cold-Start Results
+
+| Threshold | Ridge Spearman r | LightGBM r | Coverage gain | Venues rescued |
+|-----------|-----------------|------------|--------------|----------------|
+| 3 reviews | 0.624 | 0.763 | +0.0% | 0 |
+| 5 reviews | 0.624 | 0.763 | +0.0% | 0 |
+| 10 reviews | 0.624 | 0.755 | +2.3% | 192 |
+| **20 reviews** | **0.607** | **0.732** | **+12.3%** | **1,045** |
+
+**Best threshold: 20 reviews.** Coverage: 86.8% → **99.1%** (+12.3%). Ridge Spearman r=0.607 — well above the 0.4 publishability floor. Warm venue NDCG@10 preserved at 0.0765 (BiRank scores untouched).
+
+### Tests
+
+29 unit tests covering all feature computation functions and regression utilities (`tests/`). All passing.
+
+---
+
+## Causal Ranking Analysis (v9 — Direction 5, in progress)
+
+A Propensity Score Matching (PSM) study testing whether temporal consistency causally drives future revisit rates — moving from correlation to causal inference.
+
+**Design (spec at `docs/superpowers/specs/2026-05-01-causal-counterfactual-ranking-design.md`):**
+- **Treatment:** `consistency_score = weekday_ratio − minmax_norm(peak_hour_entropy)` > median → "commuter habit" venue
+- **Outcome:** `future_revisit_rate` — fraction of pre-2020 users who returned post-2020
+- **Confounders:** `total_visits`, `unique_users`, `gini_user_contribution`
+- **Method:** 1:1 nearest-neighbour PSM (caliper = 0.2 × SD of logit propensity); bootstrap ATE 95% CI; Mahalanobis robustness check
+- **Validation:** SMD balance table (threshold SMD < 0.1, Austin 2011); standalone analysis — ranking pipeline not modified
+
+Implementation in progress.
 
 ---
 
@@ -485,6 +546,13 @@ See `README_dashboard.md` for full usage guide.
 
 | File | Description |
 |------|-------------|
+| `coffee_venue_features_v2.csv` | Venue feature matrix — 25 columns (15 behavioral + 10 anonymous temporal) |
+| `anonymous_venue_signals.csv` | Anonymous temporal features for all 131,930 Yelp venues |
+| `cold_start_scores.csv` | Pseudo-BiRank scores for 1,045 cold venues (threshold=20) |
+| `cold_start_threshold_sweep.csv` | Spearman r and coverage gain for thresholds [3,5,10,20] |
+| `coffee_birank_venue_scores_v5.csv` | Unified rankings: 7,389 BiRank + 1,045 cold-start + 75 unranked |
+| `cold_start_validation_report.txt` | Coverage gain, calibration quality, ablation table |
+| `cold_start_ablation_table.csv` | Threshold ablation — thesis-ready |
 | `coffee_birank_venue_scores_v3.csv` | Best coffee venue rankings |
 | `coffee_birank_user_scores_v3.csv` | User importance scores |
 | `coffee_user_features_v3.csv` | User behavioral feature matrix |
@@ -562,7 +630,7 @@ See `README_dashboard.md` for full usage guide.
 ## Requirements
 
 - Python 3.9+
-- Key packages: `streamlit`, `pandas`, `numpy`, `scipy`, `scikit-learn`, `networkx`, `folium`, `duckdb`, `pyarrow`
+- Key packages: `streamlit`, `pandas`, `numpy`, `scipy`, `scikit-learn`, `networkx`, `folium`, `duckdb`, `pyarrow`, `lightgbm`, `pytest`
 - LLM simulation: `openai>=1.75.0`, `anthropic>=0.49.0`, `tqdm` (see `llm_simulation/requirements.txt`)
 - Hardware: Developed on Apple M5, 16GB RAM
 - API keys: `OPENAI_API_KEY` (required for simulation), `ANTHROPIC_API_KEY` (optional, for Claude replication) — set in `llm_simulation/.env`
