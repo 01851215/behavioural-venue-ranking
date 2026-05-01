@@ -34,7 +34,8 @@ def compute_consistency_score(df: pd.DataFrame) -> pd.DataFrame:
     valid = df["weekday_ratio"].notna() & df["peak_hour_entropy"].notna()
 
     ent = df.loc[valid, "peak_hour_entropy"]
-    ent_norm = (ent - ent.min()) / (ent.max() - ent.min())
+    denom = ent.max() - ent.min()
+    ent_norm = (ent - ent.min()) / denom if denom > 0 else pd.Series(0.0, index=ent.index)
 
     df["peak_hour_entropy_norm"] = np.nan
     df.loc[valid, "peak_hour_entropy_norm"] = ent_norm
@@ -77,6 +78,12 @@ def build_causal_dataset(df: pd.DataFrame, future_revisit_rates: dict) -> pd.Dat
     Join treatment, confounders, and outcome into one analysis-ready DataFrame.
     Drops venues missing outcome or treatment.
     """
+    missing = [c for c in CONFOUNDER_COLS if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"build_causal_dataset: features DataFrame is missing confounder columns: {missing}. "
+            f"Available columns: {list(df.columns)}"
+        )
     df = df.copy()
     df["future_revisit_rate"] = df["business_id"].map(future_revisit_rates)
 
@@ -85,7 +92,11 @@ def build_causal_dataset(df: pd.DataFrame, future_revisit_rates: dict) -> pd.Dat
         + CONFOUNDER_COLS
     )
     result = df[keep_cols].copy()
+    n_before = len(result)
     result = result.dropna(subset=["future_revisit_rate", "treatment"])
+    n_dropped = n_before - len(result)
+    if n_dropped:
+        print(f"  Warning: dropped {n_dropped} venues missing treatment or revisit rate")
     return result.reset_index(drop=True)
 
 
