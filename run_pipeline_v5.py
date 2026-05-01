@@ -63,9 +63,9 @@ def merge_scores(
     def assign_score(row):
         birank_val = row.get("birank_score", np.nan)
         pseudo_val = row.get("pseudo_birank_score", np.nan)
-        if row["review_count"] >= best_threshold and not (isinstance(birank_val, float) and np.isnan(birank_val)):
+        if row["review_count"] >= best_threshold and not pd.isna(birank_val):
             return birank_val, "birank"
-        elif not (isinstance(pseudo_val, float) and np.isnan(pseudo_val)):
+        elif not pd.isna(pseudo_val):
             return pseudo_val, "cold_start"
         else:
             return 0.0, "unranked"
