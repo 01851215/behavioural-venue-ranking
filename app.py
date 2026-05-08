@@ -2465,6 +2465,176 @@ to rank venues and choose between the model's top pick vs. the star-rating top p
 # ============================================================================
 
 
+LONDON_BIRANK_FILE    = DATA_DIR / "london_birank_venue_scores.csv"
+LONDON_BIZ_FILE       = DATA_DIR / "london_businesses.csv"
+LONDON_INTERACT_FILE  = DATA_DIR / "london_interactions.csv"
+LONDON_VALID_FILE     = DATA_DIR / "london_validation_summary.txt"
+
+
+@st.cache_data(ttl=600)
+def load_london_data():
+    scores = safe_read_csv(LONDON_BIRANK_FILE)
+    biz    = safe_read_csv(LONDON_BIZ_FILE)
+    if scores.empty or biz.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    scores["business_id"] = scores["business_id"].astype(str)
+    biz["business_id"]    = biz["business_id"].astype(str)
+    df = scores.merge(biz[["business_id", "url"]], on="business_id", how="left")
+    # Clean underscored names → readable
+    df["name_clean"] = df["name"].str.replace("_", " ", regex=False)
+    # Review counts from interactions for popularity ranking
+    if LONDON_INTERACT_FILE.exists():
+        interactions = pd.read_csv(LONDON_INTERACT_FILE, usecols=["business_id", "stars"])
+        interactions["business_id"] = interactions["business_id"].astype(str)
+        counts = interactions.groupby("business_id").agg(
+            review_count=("stars", "count"),
+            avg_stars=("stars", "mean"),
+        ).reset_index()
+        df = df.merge(counts, on="business_id", how="left")
+        df["avg_stars"] = df["avg_stars"].round(2)
+    return df, biz
+
+
+def render_london_dashboard() -> None:
+    st.header("🇬🇧 London — UK Restaurant Analysis")
+    st.caption("TripAdvisor London · 997K reviews · 1,877 venues · Split: 2018-01-01")
+
+    df, _ = load_london_data()
+    if df.empty:
+        st.error("London data not found. Run `ingest_london_tripadvisor.py` and `run_london_pipeline.py` first.")
+        return
+
+    # ── Tabs ──────────────────────────────────────────────────────────────
+    tab_rank, tab_valid, tab_insight = st.tabs(["Rankings", "Validation", "Domain Insight"])
+
+    # ── Rankings tab ──────────────────────────────────────────────────────
+    with tab_rank:
+        st.subheader("London Restaurant Rankings")
+
+        col_method, col_n = st.columns([2, 1])
+        with col_method:
+            method = st.selectbox(
+                "Rank by",
+                ["BiRank (behavioral)", "Popularity (review count)", "Star rating"],
+                key="london_rank_method",
+            )
+        with col_n:
+            top_n = st.slider("Show top N", 10, 100, 25, key="london_top_n")
+
+        if method == "BiRank (behavioral)":
+            sorted_df = df.sort_values("rank").head(top_n)
+            score_col, score_label = "birank_score", "BiRank Score"
+        elif method == "Popularity (review count)":
+            sorted_df = df.sort_values("review_count", ascending=False).head(top_n)
+            score_col, score_label = "review_count", "Reviews"
+        else:
+            sorted_df = df.sort_values("avg_stars", ascending=False).head(top_n)
+            score_col, score_label = "avg_stars", "Avg Stars"
+
+        display = sorted_df[["name_clean", score_col, "review_count", "avg_stars", "url"]].copy()
+        display.columns = ["Restaurant", score_label, "Reviews", "Avg Stars", "TripAdvisor"]
+        display["Reviews"]   = display["Reviews"].fillna(0).astype(int)
+        display["Avg Stars"] = display["Avg Stars"].round(2)
+        display[score_label] = display[score_label].round(4) if score_col == "birank_score" else display[score_label]
+        display["TripAdvisor"] = display["TripAdvisor"].apply(
+            lambda u: f"[Link]({u})" if pd.notna(u) else ""
+        )
+        st.dataframe(display.reset_index(drop=True), use_container_width=True, hide_index=True)
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total venues ranked", f"{len(df):,}")
+        c2.metric("Total reviews", f"{int(df['review_count'].sum()):,}" if "review_count" in df else "—")
+        c3.metric("Avg stars (dataset)", f"{df['avg_stars'].mean():.2f}" if "avg_stars" in df else "—")
+
+    # ── Validation tab ─────────────────────────────────────────────────────
+    with tab_valid:
+        st.subheader("Method Comparison — Rising Stars Metric")
+        st.info(
+            "**Rising-stars ρ** = Spearman correlation between model score and venue "
+            "traffic growth *after* controlling for popularity via OLS. Values > +0.032 "
+            "(the popularity baseline) indicate the method adds genuine value."
+        )
+
+        # Hardcoded results from london_validation_summary.txt
+        val_data = {
+            "Method": [
+                "Popularity baseline", "Star ratings", "BiRank (loyalty priors)",
+                "BiRank (exploration priors)", "ALS alone", "BPR alone",
+                "Hybrid: explore + ALS ★",
+            ],
+            "ρ (rising stars)": [+0.0320, -0.1462, -0.2098, -0.0303, +0.0017, -0.0121, +0.0944],
+            "p-value":          [0.187,    0.000,   0.000,    0.211,   0.943,   0.616,   0.000],
+            "Note": [
+                "Reference", "Anti-predictive", "Wrong domain — harmful",
+                "Neutral after fix", "No signal", "No signal",
+                "WINNER — beats popularity",
+            ],
+        }
+        val_df = pd.DataFrame(val_data)
+
+        def colour_rho(val):
+            if val > 0.05:
+                return "background-color: #d4edda"
+            if val < -0.05:
+                return "background-color: #f8d7da"
+            return "background-color: #fff3cd"
+
+        styled = val_df.style.applymap(colour_rho, subset=["ρ (rising stars)"])
+        st.dataframe(styled, use_container_width=True, hide_index=True)
+
+        st.caption(
+            "Green = positive (adds value over popularity). "
+            "Red = negative (worse than popularity). "
+            "Yellow = neutral."
+        )
+
+        if LONDON_VALID_FILE.exists():
+            with st.expander("Full validation report"):
+                st.code(LONDON_VALID_FILE.read_text(), language="text")
+
+    # ── Domain insight tab ────────────────────────────────────────────────
+    with tab_insight:
+        st.subheader("Domain-Specificity Finding")
+        st.markdown(
+            """
+            **The core insight from the London analysis:**
+
+            Standard BiRank uses *loyalty priors* — it rewards venues visited by users with
+            high revisit rates. For Yelp coffee shops, this works perfectly (Loyalists drive
+            everything). For London tourist restaurants, the same priors **actively harm**
+            prediction (ρ = −0.21, p < 0.001).
+
+            The fix is to match the prior to the behavioral mode of the domain:
+            - **Coffee (Loyalty domain):** Loyalty priors → BiRank wins (NDCG@10 = 0.0765)
+            - **Tourist restaurants (Explorer domain):** Exploration priors + ALS hybrid →
+              hybrid wins (ρ = +0.094, p < 0.001 vs rising stars)
+            """,
+            unsafe_allow_html=False,
+        )
+
+        domain_summary = pd.DataFrame({
+            "Domain": ["Coffee shops", "Restaurants (US)", "Hotels", "London tourists"],
+            "Revisit rate": ["~10%", "33.8%", "~2.4%", "2.6%"],
+            "Winner": ["BiRank", "Star ratings", "Item-KNN", "Popularity"],
+            "BiRank NDCG@10 / ρ": ["0.0765", "0.396", "0.100", "ρ = −0.03"],
+            "Baseline": ["Stars: 0.0754", "Stars: 0.406", "Stars: 0.093", "Pop: ρ = +0.03"],
+            "Interpretation": [
+                "Habit-driven revisits — behavioral wins",
+                "Quality-driven revisits — ratings win",
+                "Too sparse for behavioral signal",
+                "Exploration-driven — no method wins standalone",
+            ],
+        })
+        st.dataframe(domain_summary, use_container_width=True, hide_index=True)
+
+        st.success(
+            "**Thesis claim:** Behavioral ranking outperforms star ratings specifically "
+            "in habit-driven domains where loyalty is the primary driver of repeat visits. "
+            "In quality-driven or exploration-driven domains, explicit ratings or hybrid "
+            "methods are more appropriate."
+        )
+
+
 def main() -> None:
     st.set_page_config(page_title="Behavioral Engine", layout="wide", page_icon="☕")
     st.title("Behavioral Recommendation Dashboard")
@@ -2479,12 +2649,14 @@ def main() -> None:
 
     domain = st.sidebar.radio(
         "Select Domain",
-        ["Coffee Shops", "Restaurants", "Hotels & Accommodation", "LLM Simulation"],
+        ["Coffee Shops", "Restaurants", "Hotels & Accommodation", "London (UK)", "LLM Simulation"],
         key="domain_select"
     )
 
     if domain == "LLM Simulation":
         render_llm_simulation_page()
+    elif domain == "London (UK)":
+        render_london_dashboard()
     else:
         render_data_health_panel(domain)
         if domain == "Hotels & Accommodation":
