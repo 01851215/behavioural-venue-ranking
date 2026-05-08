@@ -34,6 +34,7 @@ Includes a validated **coffee shop model** (BiRank with behavioral priors), a **
 - **v7 (hotel model):** Extended the whole framework to hotels and accommodation. This required redesigning the behavioral features from scratch — hotels are fundamentally different from coffee shops (nobody visits the same hotel weekly). Key finding: BiRank still beats star ratings (p=0.012), but collaborative filtering outperforms behavioral signals for hotels because most users only stay at 1–2 hotels, making behavior patterns too sparse to learn from. Also conducted a cross-domain experiment: users who explore many coffee shops tend to explore many hotels too, but predicting hotel preferences from coffee habits is only marginally better than chance.
 - **v8 (LLM simulation):** Added two independent external validation studies using GPT-5.4 synthetic personas. **Study 1** — 1,500 personas grounded in the four behavioural archetypes identified from Yelp data (Loyalist, Weekday Regular, Casual Weekender, Infrequent Visitor) across all three domains. Each persona performs three tasks: venue ranking (NDCG@10), pairwise head-to-head (BiRank vs. stars), and revisit prediction. Metrics include Hit@1/3, Kendall τ, BH-corrected p-values, Cohen's d, and rank-biserial correlation. **Study 2** — 1,860 personas across a 5 age-group × 10 occupation cross-matrix (Gen Z → Boomer; Tech/Software → Remote/Digital Nomad), grounded in 51 published consumer-behaviour sources (NCA, McKinsey, J.D. Power, GBTA, Hilton Trends Report, etc.). Both studies run alongside the real-data validation for independent triangulation. Also added a live Persona Chat in the Streamlit dashboard: pick an archetype, city, and domain — a GPT-5.4-mini persona recommends real venues from the dataset and explains why in character.
 - **v9 (cold-start + causal):** Two completed directions, both fully tested and validated. **Direction 3** — anonymous venue signal module: extracted 10 temporal features (burstiness, peak-hour entropy, weekday ratio, growth trend, etc.) from 13.3M Yelp check-in timestamps across 131,930 venues. Trained a calibrated Ridge regression (Spearman r=0.62; LightGBM r=0.76) to produce pseudo-BiRank scores for venues with fewer than 20 reviews. Pipeline v5 injects cold-start scores for 1,045 previously unranked venues, raising total coverage from 86.8% → 99.1% (+12.3%). Venue feature matrix expanded from 15 → 25 columns. **Direction 5** — causal PSM study: 1:1 nearest-neighbour Propensity Score Matching across 7,853 coffee venues (2,957 matched pairs). All confounders well-balanced post-matching (SMD < 0.1). ATE = +0.001 (directionally positive, p=0.15) — result is robust across both PSM and Mahalanobis matching methods. Statistical power is reduced by COVID-19 compressing post-2020 revisit rates.
+- **v10 (UK expansion — London):** Extended the pipeline to the UK using TripAdvisor London restaurant data (Zenodo 6583422, CC-BY-NC 4.0) + OpenStreetMap London venue reference. Three-phase analysis. **Phase 1** — rising-stars evaluation and exploration priors: standard BiRank loyalty priors actively harm on exploration-driven data (ρ = −0.21, p<0.001 on rising-stars metric); replacing with exploration priors (inverse-popularity venue weights, diversity-weighted user priors) neutralises the damage (ρ = −0.03, p=0.21). **Phase 2** — Matrix Factorization: ALS alone adds no signal (ρ = +0.002); but a hybrid of exploration-BiRank + ALS significantly beats the popularity baseline on rising-stars prediction (ρ = +0.094, p<0.001). **Key finding:** Behavioral ranking is domain-specific — loyalty priors work for coffee shops (Loyalist domain), exploration priors + MF hybrid work for tourist restaurants (Explorer domain). This is a publishable domain-specificity finding.
 
 ---
 
@@ -203,18 +204,70 @@ Addresses a fundamental data coverage gap: 72% of Yelp check-in events have no `
 
 ---
 
-## Causal Ranking Analysis (v9 — Direction 5, in progress)
+## Causal Ranking Analysis (v9 — Direction 5)
 
-A Propensity Score Matching (PSM) study testing whether temporal consistency causally drives future revisit rates — moving from correlation to causal inference.
+A Propensity Score Matching (PSM) study testing whether temporal consistency causally drives future revisit rates.
 
-**Design (spec at `docs/superpowers/specs/2026-05-01-causal-counterfactual-ranking-design.md`):**
-- **Treatment:** `consistency_score = weekday_ratio − minmax_norm(peak_hour_entropy)` > median → "commuter habit" venue
+**Design:**
+- **Treatment:** `consistency_score = weekday_ratio − minmax_norm(peak_hour_entropy)` > median
 - **Outcome:** `future_revisit_rate` — fraction of pre-2020 users who returned post-2020
 - **Confounders:** `total_visits`, `unique_users`, `gini_user_contribution`
-- **Method:** 1:1 nearest-neighbour PSM (caliper = 0.2 × SD of logit propensity); bootstrap ATE 95% CI; Mahalanobis robustness check
-- **Validation:** SMD balance table (threshold SMD < 0.1, Austin 2011); standalone analysis — ranking pipeline not modified
+- **Method:** 1:1 nearest-neighbour PSM (caliper = 0.2 × SD logit propensity); bootstrap ATE 95% CI; Mahalanobis robustness check
 
-Implementation in progress.
+**Results:** ATE = +0.001 (directionally positive, p=0.15). All 3 confounders well-balanced after matching (SMD < 0.1). Robust across PSM and Mahalanobis. Power limited by COVID-19 compressing post-2020 revisit rates to near-zero.
+
+---
+
+## UK Expansion — London (v10)
+
+Extends the pipeline to the UK using TripAdvisor London restaurant data and OpenStreetMap venue reference.
+
+### Data Sources
+
+| Source | Scale | Role |
+|---|---|---|
+| TripAdvisor London (Zenodo 6583422) | 997K reviews, 502K users, 1,877 venues | Review interactions (user_id, business_id, timestamp, stars) |
+| OpenStreetMap London (Overpass API) | 28,124 POIs | Venue reference (GPS, category, postcode) |
+| FSQ WWW2019 UK subset (already in DuckDB) | 346K check-ins, 6,824 users | Anonymous temporal signals |
+
+### Pipeline
+
+| Script | Description |
+|---|---|
+| `ingest_london_tripadvisor.py` | Download + convert TripAdvisor London CSV → `london_interactions.csv` |
+| `fetch_london_osm_venues.py` | Pull London cafés/restaurants/hotels from OSM Overpass API |
+| `run_london_pipeline.py` | Full ranking pipeline: BiRank variants + MF + hybrid + evaluation |
+
+### Three-Phase Analysis
+
+**Phase 1 — Rising-Stars Evaluation + Exploration Priors**
+
+Standard evaluation (predict raw test traffic) is dominated by popularity (ρ=0.61). Replacing it with a *rising-stars residual* (venue traffic growth after controlling for popularity via OLS) reveals whether any model adds value beyond raw counts.
+
+Standard BiRank loyalty priors are **anti-predictive on exploration data** (ρ = −0.21, p<0.001) — they actively identify venues that *decline*. Replacing with exploration-adapted priors (inverse-popularity venue weights, diversity-weighted user weights) neutralises the damage (ρ = −0.03, not significant).
+
+**Phase 2 — Matrix Factorization**
+
+ALS and BPR trained on the same user-venue interaction matrix. ALS alone ρ = +0.002 (no signal). BPR alone ρ = −0.01. Neither beats popularity alone.
+
+**Phase 3 — Hybrid: Exploration BiRank + ALS**
+
+Combining exploration-BiRank (down-weights popular venues) with ALS (latent collaborative patterns) produces a synergistic result:
+
+| Method | ρ (rising stars) | p-value |
+|---|---|---|
+| Popularity baseline | +0.032 | 0.187 |
+| Star ratings | −0.146 | <0.001 |
+| BiRank (loyalty priors) | −0.210 | <0.001 |
+| BiRank (exploration priors) | −0.030 | 0.211 |
+| ALS alone | +0.002 | 0.943 |
+| **Hybrid (explore + ALS)** | **+0.094** | **<0.001** |
+
+The hybrid is the only method that significantly outperforms popularity on rising-stars prediction (Δρ = +0.062, p<0.001).
+
+### Domain-Specificity Finding
+
+> Behavioral ranking is domain-specific. Loyalty priors (BiRank) work in loyalty-driven domains (Yelp coffee: NDCG@10=0.0765, p=0.038 vs random). In exploration-driven tourist-restaurant data, loyalty priors cause active harm. The fix is to match priors to the behavioral mode: exploration priors + MF hybrid produces statistically significant rising-star prediction where standalone methods fail.
 
 ---
 
