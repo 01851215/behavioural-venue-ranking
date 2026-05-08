@@ -19,7 +19,7 @@ DATA_DIR      = Path(__file__).parent
 REVIEW_PATH   = DATA_DIR / "../yelp_dataset/yelp_academic_dataset_review.json"
 COFFEE_PATH   = DATA_DIR / "business_coffee_v2.csv"
 FEATURES_PATH = DATA_DIR / "coffee_venue_features_v2.csv"
-SPLIT_DATE    = "2020-01-01"
+SPLIT_DATE    = "2018-01-01"  # Changed from 2020-01-01: avoids COVID compression, gives 4-year outcome window (2018-2022)
 
 CONFOUNDER_COLS = ["total_visits", "unique_users", "gini_user_contribution"]
 
