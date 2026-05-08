@@ -39,10 +39,12 @@ CATEGORY_MAP = {
 def build_query(bbox: str) -> str:
     amenities = "|".join(CATEGORY_MAP.keys())
     return f"""
-[out:json][timeout:120];
+[out:json][timeout:180];
 (
   node[amenity~"{amenities}"]({bbox});
   way[amenity~"{amenities}"]({bbox});
+  node[tourism~"hotel|hostel|guest_house|bed_and_breakfast|motel"]({bbox});
+  way[tourism~"hotel|hostel|guest_house|bed_and_breakfast|motel"]({bbox});
 );
 out center tags;
 """
@@ -71,7 +73,12 @@ def parse_venues(elements: list[dict]) -> pd.DataFrame:
             continue  # skip unnamed venues
 
         amenity  = tags.get("amenity", "")
-        category = CATEGORY_MAP.get(amenity, amenity)
+        tourism  = tags.get("tourism", "")
+        if tourism in ("hotel", "hostel", "guest_house", "bed_and_breakfast", "motel"):
+            category = "Hotel"
+            amenity  = tourism
+        else:
+            category = CATEGORY_MAP.get(amenity, amenity)
 
         # Nodes have lat/lon directly; ways have a 'center' key
         if el["type"] == "node":

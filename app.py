@@ -2469,20 +2469,74 @@ LONDON_BIRANK_FILE    = DATA_DIR / "london_birank_venue_scores.csv"
 LONDON_BIZ_FILE       = DATA_DIR / "london_businesses.csv"
 LONDON_INTERACT_FILE  = DATA_DIR / "london_interactions.csv"
 LONDON_VALID_FILE     = DATA_DIR / "london_validation_summary.txt"
+LONDON_OSM_FILE       = DATA_DIR / "london_osm_venues.csv"
+
+# London district centres (lat, lon)
+LONDON_DISTRICTS = {
+    "All London":                  (51.5074, -0.1278, 12),
+    "Westminster / Soho":          (51.4975, -0.1357, 14),
+    "Mayfair / Marylebone":        (51.5118, -0.1508, 14),
+    "Covent Garden / Strand":      (51.5117, -0.1240, 15),
+    "South Kensington / Chelsea":  (51.4950, -0.1738, 14),
+    "Notting Hill / Portobello":   (51.5136, -0.2013, 15),
+    "Shoreditch / Hoxton":         (51.5243, -0.0700, 14),
+    "Borough / Bermondsey":        (51.5011, -0.0919, 15),
+    "Camden / King's Cross":       (51.5390, -0.1426, 14),
+    "Islington / Angel":           (51.5362, -0.1033, 15),
+    "Hackney / Dalston":           (51.5450, -0.0553, 14),
+    "Clapham / Battersea":         (51.4640, -0.1382, 14),
+    "Brixton / Stockwell":         (51.4613, -0.1156, 15),
+    "Canary Wharf / Isle of Dogs": (51.5054, -0.0235, 14),
+    "Greenwich / Deptford":        (51.4826, -0.0077, 14),
+    "Hampstead / Belsize Park":    (51.5560, -0.1791, 14),
+    "Wembley Park":                (51.5635, -0.2795, 14),
+    "Stratford / Olympic Park":    (51.5415, -0.0023, 14),
+    "Richmond / Kew":              (51.4613, -0.3037, 14),
+}
+
+# Category colours for map markers
+CAT_COLOURS = {
+    "Coffee Shop": "#6F4E37",
+    "Restaurant":  "#E74C3C",
+    "Hotel":       "#2980B9",
+    "Pub":         "#27AE60",
+    "Bar":         "#8E44AD",
+    "Fast Food":   "#E67E22",
+}
+CAT_ICONS = {
+    "Coffee Shop": "coffee",
+    "Restaurant":  "cutlery",
+    "Hotel":       "home",
+    "Pub":         "glass",
+    "Bar":         "glass",
+    "Fast Food":   "shopping-cart",
+}
 
 
 @st.cache_data(ttl=600)
-def load_london_data():
+def load_london_osm() -> pd.DataFrame:
+    if not LONDON_OSM_FILE.exists():
+        return pd.DataFrame()
+    osm = pd.read_csv(LONDON_OSM_FILE)
+    # Keep only venue-relevant categories
+    keep = ["Coffee Shop", "Restaurant", "Hotel", "Pub", "Bar", "Fast Food"]
+    osm = osm[osm["category"].isin(keep)].copy()
+    osm["name"] = osm["name"].fillna("Unknown")
+    osm["postcode"] = osm["postcode"].fillna("")
+    osm["cuisine"] = osm["cuisine"].fillna("")
+    return osm.reset_index(drop=True)
+
+
+@st.cache_data(ttl=600)
+def load_london_tripadvisor() -> pd.DataFrame:
     scores = safe_read_csv(LONDON_BIRANK_FILE)
     biz    = safe_read_csv(LONDON_BIZ_FILE)
     if scores.empty or biz.empty:
-        return pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame()
     scores["business_id"] = scores["business_id"].astype(str)
     biz["business_id"]    = biz["business_id"].astype(str)
     df = scores.merge(biz[["business_id", "url"]], on="business_id", how="left")
-    # Clean underscored names → readable
     df["name_clean"] = df["name"].str.replace("_", " ", regex=False)
-    # Review counts from interactions for popularity ranking
     if LONDON_INTERACT_FILE.exists():
         interactions = pd.read_csv(LONDON_INTERACT_FILE, usecols=["business_id", "stars"])
         interactions["business_id"] = interactions["business_id"].astype(str)
@@ -2492,146 +2546,243 @@ def load_london_data():
         ).reset_index()
         df = df.merge(counts, on="business_id", how="left")
         df["avg_stars"] = df["avg_stars"].round(2)
-    return df, biz
+    return df
+
+
+def _filter_by_district(osm: pd.DataFrame, district: str, radius_km: float) -> pd.DataFrame:
+    lat_c, lon_c, _ = LONDON_DISTRICTS[district]
+    if district == "All London":
+        return osm
+    # Haversine filter within radius_km
+    R = 6371.0
+    lat_r = np.radians(osm["lat"].values)
+    lon_r = np.radians(osm["lon"].values)
+    dlat  = np.radians(lat_c) - lat_r
+    dlon  = np.radians(lon_c) - lon_r
+    a = np.sin(dlat / 2)**2 + np.cos(lat_r) * np.cos(np.radians(lat_c)) * np.sin(dlon / 2)**2
+    dist_km = 2 * R * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
+    return osm[dist_km <= radius_km].copy()
 
 
 def render_london_dashboard() -> None:
-    st.header("🇬🇧 London — UK Restaurant Analysis")
-    st.caption("TripAdvisor London · 997K reviews · 1,877 venues · Split: 2018-01-01")
+    from streamlit_folium import st_folium
+    from folium.plugins import MarkerCluster
 
-    df, _ = load_london_data()
-    if df.empty:
-        st.error("London data not found. Run `ingest_london_tripadvisor.py` and `run_london_pipeline.py` first.")
+    st.header("🇬🇧 London — UK Venue Explorer")
+    st.caption("OpenStreetMap: 29,810 venues (coffee shops, restaurants, hotels, pubs)  ·  "
+               "TripAdvisor: 997K reviews, 1,877 restaurants with BiRank scores")
+
+    osm = load_london_osm()
+    ta  = load_london_tripadvisor()
+
+    if osm.empty:
+        st.error("OSM data not found. Run `fetch_london_osm_venues.py` first.")
         return
 
-    # ── Tabs ──────────────────────────────────────────────────────────────
-    tab_rank, tab_valid, tab_insight = st.tabs(["Rankings", "Validation", "Domain Insight"])
+    # ── Sidebar controls ────────────────────────────────────────────────
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("London Filters")
 
-    # ── Rankings tab ──────────────────────────────────────────────────────
-    with tab_rank:
-        st.subheader("London Restaurant Rankings")
+    categories_avail = ["All"] + sorted(osm["category"].unique().tolist())
+    sel_cat = st.sidebar.multiselect(
+        "Venue type",
+        options=[c for c in ["Coffee Shop", "Restaurant", "Hotel", "Pub", "Bar", "Fast Food"]
+                 if c in osm["category"].unique()],
+        default=["Coffee Shop", "Restaurant", "Hotel"],
+        key="london_cat",
+    )
 
-        col_method, col_n = st.columns([2, 1])
-        with col_method:
-            method = st.selectbox(
-                "Rank by",
-                ["BiRank (behavioral)", "Popularity (review count)", "Star rating"],
-                key="london_rank_method",
-            )
-        with col_n:
-            top_n = st.slider("Show top N", 10, 100, 25, key="london_top_n")
+    district = st.sidebar.selectbox(
+        "District / Area",
+        options=list(LONDON_DISTRICTS.keys()),
+        index=0,
+        key="london_district",
+    )
 
-        if method == "BiRank (behavioral)":
-            sorted_df = df.sort_values("rank").head(top_n)
-            score_col, score_label = "birank_score", "BiRank Score"
-        elif method == "Popularity (review count)":
-            sorted_df = df.sort_values("review_count", ascending=False).head(top_n)
-            score_col, score_label = "review_count", "Reviews"
-        else:
-            sorted_df = df.sort_values("avg_stars", ascending=False).head(top_n)
-            score_col, score_label = "avg_stars", "Avg Stars"
-
-        display = sorted_df[["name_clean", score_col, "review_count", "avg_stars", "url"]].copy()
-        display.columns = ["Restaurant", score_label, "Reviews", "Avg Stars", "TripAdvisor"]
-        display["Reviews"]   = display["Reviews"].fillna(0).astype(int)
-        display["Avg Stars"] = display["Avg Stars"].round(2)
-        display[score_label] = display[score_label].round(4) if score_col == "birank_score" else display[score_label]
-        display["TripAdvisor"] = display["TripAdvisor"].apply(
-            lambda u: f"[Link]({u})" if pd.notna(u) else ""
+    if district != "All London":
+        radius_km = st.sidebar.slider(
+            "Radius (km)", min_value=0.3, max_value=5.0, value=1.0, step=0.1,
+            key="london_radius",
         )
-        st.dataframe(display.reset_index(drop=True), use_container_width=True, hide_index=True)
+    else:
+        radius_km = 50.0
 
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total venues ranked", f"{len(df):,}")
-        c2.metric("Total reviews", f"{int(df['review_count'].sum()):,}" if "review_count" in df else "—")
-        c3.metric("Avg stars (dataset)", f"{df['avg_stars'].mean():.2f}" if "avg_stars" in df else "—")
+    top_n_map = st.sidebar.slider(
+        "Max markers on map", 100, 2000, 500, step=100, key="london_map_n",
+        help="Limit markers for performance. Increase for denser areas.",
+    )
 
-    # ── Validation tab ─────────────────────────────────────────────────────
+    # ── Filter OSM ──────────────────────────────────────────────────────
+    filtered = osm.copy()
+    if sel_cat:
+        filtered = filtered[filtered["category"].isin(sel_cat)]
+    filtered = _filter_by_district(filtered, district, radius_km)
+
+    # ── Tabs ────────────────────────────────────────────────────────────
+    tab_map, tab_rank, tab_valid, tab_insight = st.tabs(
+        ["🗺 Map", "📋 Rankings", "📊 Validation", "🔬 Domain Insight"]
+    )
+
+    # ── MAP TAB ─────────────────────────────────────────────────────────
+    with tab_map:
+        lat_c, lon_c, zoom = LONDON_DISTRICTS[district]
+        m = folium.Map(location=[lat_c, lon_c], zoom_start=zoom,
+                       tiles="CartoDB positron")
+
+        cluster = MarkerCluster(
+            options={"maxClusterRadius": 40, "disableClusteringAtZoom": 16}
+        ).add_to(m)
+
+        # Sample to top_n_map for performance
+        plot_df = filtered.head(top_n_map)
+
+        for _, row in plot_df.iterrows():
+            cat   = row["category"]
+            color = CAT_COLOURS.get(cat, "#7F8C8D")
+            icon  = CAT_ICONS.get(cat, "info-sign")
+            popup_lines = [f"<b>{row['name']}</b>", f"<i>{cat}</i>"]
+            if row["postcode"]:
+                popup_lines.append(row["postcode"])
+            if row["cuisine"]:
+                popup_lines.append(f"Cuisine: {row['cuisine']}")
+            if row.get("website"):
+                popup_lines.append(f"<a href='{row['website']}' target='_blank'>Website</a>")
+            popup_html = "<br>".join(popup_lines)
+
+            folium.Marker(
+                location=[row["lat"], row["lon"]],
+                popup=folium.Popup(popup_html, max_width=220),
+                tooltip=row["name"],
+                icon=folium.Icon(color="white", icon_color=color,
+                                 icon=icon, prefix="glyphicon"),
+            ).add_to(cluster)
+
+        # Legend
+        legend_html = "<div style='position:fixed;bottom:30px;left:30px;z-index:9999;" \
+                      "background:white;padding:10px;border-radius:8px;" \
+                      "border:1px solid #ccc;font-size:12px;'>"
+        for cat, col in CAT_COLOURS.items():
+            if cat in sel_cat or not sel_cat:
+                legend_html += f"<span style='color:{col};font-size:16px;'>●</span> {cat}<br>"
+        legend_html += "</div>"
+        m.get_root().html.add_child(folium.Element(legend_html))
+
+        st_folium(m, width="100%", height=560, returned_objects=[])
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Shown on map", f"{len(plot_df):,}")
+        c2.metric("In area (all types)", f"{len(filtered):,}")
+        c3.metric("Coffee shops", f"{(filtered['category']=='Coffee Shop').sum():,}")
+        c4.metric("Hotels", f"{(filtered['category']=='Hotel').sum():,}")
+
+    # ── RANKINGS TAB ────────────────────────────────────────────────────
+    with tab_rank:
+        rank_cat = st.selectbox(
+            "Show rankings for",
+            ["Restaurants (TripAdvisor BiRank)", "Coffee Shops (OSM)",
+             "Hotels (OSM)", "All venues (OSM)"],
+            key="london_rank_cat",
+        )
+
+        if rank_cat == "Restaurants (TripAdvisor BiRank)" and not ta.empty:
+            st.caption("BiRank scores from 997K TripAdvisor reviews · 2018-01-01 split")
+            rank_method = st.radio("Sort by", ["BiRank", "Reviews", "Stars"],
+                                   horizontal=True, key="ta_sort")
+            n = st.slider("Top N", 10, 100, 30, key="ta_n")
+            if rank_method == "BiRank":
+                tbl = ta.sort_values("rank").head(n)
+            elif rank_method == "Reviews":
+                tbl = ta.sort_values("review_count", ascending=False).head(n)
+            else:
+                tbl = ta.sort_values("avg_stars", ascending=False).head(n)
+
+            show = tbl[["name_clean", "birank_score", "review_count",
+                         "avg_stars", "url"]].copy()
+            show.columns = ["Restaurant", "BiRank Score", "Reviews", "Avg ★", "Link"]
+            show["BiRank Score"] = show["BiRank Score"].round(5)
+            show["Reviews"]      = show["Reviews"].fillna(0).astype(int)
+            show["Avg ★"]        = show["Avg ★"].round(2)
+            st.dataframe(show.reset_index(drop=True), use_container_width=True, hide_index=True)
+
+        else:
+            # OSM-based ranking by category
+            cat_map = {
+                "Coffee Shops (OSM)":  "Coffee Shop",
+                "Hotels (OSM)":        "Hotel",
+                "All venues (OSM)":    None,
+            }
+            cat_filter = cat_map.get(rank_cat)
+            sub = filtered[filtered["category"] == cat_filter] if cat_filter else filtered
+            n = st.slider("Top N", 10, 200, 50, key="osm_n")
+            show = sub[["name", "category", "cuisine", "postcode",
+                         "street"]].head(n).reset_index(drop=True)
+            show.columns = ["Name", "Category", "Cuisine", "Postcode", "Street"]
+            st.dataframe(show, use_container_width=True, hide_index=True)
+            st.caption(f"Showing {len(show):,} venues from OpenStreetMap "
+                       f"(no review scores available for OSM-only venues)")
+
+    # ── VALIDATION TAB ───────────────────────────────────────────────────
     with tab_valid:
         st.subheader("Method Comparison — Rising Stars Metric")
         st.info(
             "**Rising-stars ρ** = Spearman correlation between model score and venue "
-            "traffic growth *after* controlling for popularity via OLS. Values > +0.032 "
-            "(the popularity baseline) indicate the method adds genuine value."
+            "traffic growth *after* controlling for popularity via OLS. "
+            "Values > +0.032 (popularity baseline) = genuine value added."
         )
-
-        # Hardcoded results from london_validation_summary.txt
         val_data = {
-            "Method": [
-                "Popularity baseline", "Star ratings", "BiRank (loyalty priors)",
-                "BiRank (exploration priors)", "ALS alone", "BPR alone",
-                "Hybrid: explore + ALS ★",
-            ],
-            "ρ (rising stars)": [+0.0320, -0.1462, -0.2098, -0.0303, +0.0017, -0.0121, +0.0944],
-            "p-value":          [0.187,    0.000,   0.000,    0.211,   0.943,   0.616,   0.000],
-            "Note": [
-                "Reference", "Anti-predictive", "Wrong domain — harmful",
-                "Neutral after fix", "No signal", "No signal",
-                "WINNER — beats popularity",
-            ],
+            "Method": ["Popularity baseline", "Star ratings", "BiRank (loyalty priors)",
+                        "BiRank (exploration priors)", "ALS alone", "BPR alone",
+                        "Hybrid: explore + ALS ★"],
+            "ρ (rising stars)": [+0.032, -0.146, -0.210, -0.030, +0.002, -0.012, +0.094],
+            "p-value":          [0.187,   0.000,  0.000,   0.211,  0.943,  0.616,  0.000],
+            "Note": ["Reference", "Anti-predictive", "Wrong domain — harmful",
+                     "Neutral (Phase 1 fix)", "No signal", "No signal",
+                     "WINNER — beats popularity"],
         }
         val_df = pd.DataFrame(val_data)
 
-        def colour_rho(val):
-            if val > 0.05:
-                return "background-color: #d4edda"
-            if val < -0.05:
-                return "background-color: #f8d7da"
-            return "background-color: #fff3cd"
+        def _colour_rho(val):
+            if val > 0.05:  return "background-color:#d4edda"
+            if val < -0.05: return "background-color:#f8d7da"
+            return "background-color:#fff3cd"
 
-        styled = val_df.style.applymap(colour_rho, subset=["ρ (rising stars)"])
-        st.dataframe(styled, use_container_width=True, hide_index=True)
-
-        st.caption(
-            "Green = positive (adds value over popularity). "
-            "Red = negative (worse than popularity). "
-            "Yellow = neutral."
+        st.dataframe(
+            val_df.style.applymap(_colour_rho, subset=["ρ (rising stars)"]),
+            use_container_width=True, hide_index=True,
         )
-
+        st.caption("Green = adds value over popularity · Red = worse than popularity · Yellow = neutral")
         if LONDON_VALID_FILE.exists():
             with st.expander("Full validation report"):
                 st.code(LONDON_VALID_FILE.read_text(), language="text")
 
-    # ── Domain insight tab ────────────────────────────────────────────────
+    # ── DOMAIN INSIGHT TAB ───────────────────────────────────────────────
     with tab_insight:
         st.subheader("Domain-Specificity Finding")
         st.markdown(
-            """
-            **The core insight from the London analysis:**
-
-            Standard BiRank uses *loyalty priors* — it rewards venues visited by users with
-            high revisit rates. For Yelp coffee shops, this works perfectly (Loyalists drive
-            everything). For London tourist restaurants, the same priors **actively harm**
-            prediction (ρ = −0.21, p < 0.001).
-
-            The fix is to match the prior to the behavioral mode of the domain:
-            - **Coffee (Loyalty domain):** Loyalty priors → BiRank wins (NDCG@10 = 0.0765)
-            - **Tourist restaurants (Explorer domain):** Exploration priors + ALS hybrid →
-              hybrid wins (ρ = +0.094, p < 0.001 vs rising stars)
-            """,
-            unsafe_allow_html=False,
+            "Standard BiRank uses **loyalty priors** optimised for Yelp coffee shops "
+            "(Loyalists, 41% revisit rate). On London tourist restaurants (2.6% revisit), "
+            "those priors actively harm prediction (ρ = −0.21, p < 0.001). "
+            "The fix: match the prior to the domain's behavioral mode."
         )
-
         domain_summary = pd.DataFrame({
-            "Domain": ["Coffee shops", "Restaurants (US)", "Hotels", "London tourists"],
-            "Revisit rate": ["~10%", "33.8%", "~2.4%", "2.6%"],
-            "Winner": ["BiRank", "Star ratings", "Item-KNN", "Popularity"],
-            "BiRank NDCG@10 / ρ": ["0.0765", "0.396", "0.100", "ρ = −0.03"],
-            "Baseline": ["Stars: 0.0754", "Stars: 0.406", "Stars: 0.093", "Pop: ρ = +0.03"],
-            "Interpretation": [
+            "Domain":          ["Coffee shops", "Restaurants (US)", "Hotels (US)", "London tourists"],
+            "Revisit rate":    ["~10%", "33.8%", "~2.4%", "2.6%"],
+            "Winner":          ["BiRank", "Star ratings", "Item-KNN", "Hybrid (explore+ALS)"],
+            "Key metric":      ["NDCG@10 = 0.0765", "NDCG@10 = 0.396", "NDCG@10 = 0.100", "ρ = +0.094"],
+            "Interpretation":  [
                 "Habit-driven revisits — behavioral wins",
                 "Quality-driven revisits — ratings win",
                 "Too sparse for behavioral signal",
-                "Exploration-driven — no method wins standalone",
+                "Exploration-driven — hybrid wins on rising stars",
             ],
         })
         st.dataframe(domain_summary, use_container_width=True, hide_index=True)
-
         st.success(
-            "**Thesis claim:** Behavioral ranking outperforms star ratings specifically "
-            "in habit-driven domains where loyalty is the primary driver of repeat visits. "
-            "In quality-driven or exploration-driven domains, explicit ratings or hybrid "
-            "methods are more appropriate."
+            "**Thesis claim:** Behavioral ranking outperforms star ratings in "
+            "habit-driven domains (coffee). In quality-driven (restaurants) or "
+            "exploration-driven (London tourists) domains, ratings or hybrid methods win. "
+            "Loyalist NDCG@10 = 0.667 across all restaurant users confirms: when behavioral "
+            "regularity exists, it is always the strongest predictive signal."
         )
 
 
