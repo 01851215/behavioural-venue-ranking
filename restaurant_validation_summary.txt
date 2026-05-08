@@ -1,0 +1,26 @@
+================================================================================
+RESTAURANT BIRANK VALIDATION — v5-style (corrected, with significance)
+Split: 2020-01-01  |  Train: 13,458,688  |  Venues: 60,644
+================================================================================
+
+  Method                         NDCG@5  NDCG@10  NDCG@20   Hit@10         95% CI NDCG@10    p-value
+  ----------------------------------------------------------------------------------------------------
+  birank_count                   0.3351   0.3954   0.4344   0.7220  [0.3892, 0.4011]     *     0.0347
+  birank_decay                   0.3358   0.3961   0.4345   0.7237  [0.3901, 0.4019]           1.0000
+  s_ruc_global                   0.3354   0.3930   0.4324   0.7217  [0.3867, 0.3988]           0.3761
+  baseline_rating                0.3493   0.4059   0.4461   0.7279  [0.4000, 0.4118]   ***     0.0005
+  baseline_popularity            0.3217   0.3806   0.4222   0.7079  [0.3742, 0.3864]   ***     0.0000
+
+  PER-GROUP NDCG@10 (best BiRank/S(R,U,C) variant):
+  Archetype                         NDCG@10    n_users
+  ------------------------------------------------------
+  Loyalist                           0.6671      3,184
+  Mixed / Average                    0.5340      1,401
+  Nightlife / Ride-Share Candidate     0.4692        504
+  Explorer                           0.2170      5,528
+
+  CROSS-DOMAIN COMPARISON:
+    Coffee BiRank (v5_combined):   NDCG@10 = 0.0765
+    Restaurant best (birank_decay): NDCG@10 = 0.3961
+    Delta: +0.3196
+================================================================================
