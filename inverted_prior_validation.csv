@@ -1,0 +1,7 @@
+dataset,method,rho,p_value,ndcg10,interpretation
+London TripAdvisor,inverted_popularity_prior,0.023854618262524285,0.3247698794952639,0.5576718230783065,popularity-amplifying (should be WORSE)
+London TripAdvisor,inverted_loyalty_prior,0.18202442137827748,3.5594190311090604e-14,0.512881100466174,anti-loyalty (penalises high-revisit venues)
+London TripAdvisor,correct_exploration_prior,-0.030284572883398364,0.21121318876724435,0.5314313038057946,correct prior (should be BETTER)
+UK Foursquare,inverted_popularity_prior,-0.3477616868182467,0.0,0.3128056294749504,popularity-amplifying (should be WORSE)
+UK Foursquare,inverted_loyalty_prior,0.2184172696327645,7.230798580540913e-126,0.08428010478295032,anti-loyalty (penalises high-revisit venues)
+UK Foursquare,correct_exploration_prior,0.036792777297145404,7.107305116840171e-05,0.12613564571451558,correct prior (should be BETTER)

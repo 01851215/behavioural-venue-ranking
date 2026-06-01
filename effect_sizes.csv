@@ -1,0 +1,6 @@
+dataset,method,cohens_d,rank_biserial_r,magnitude
+London TripAdvisor,popularity,0.0243,0.0545,negligible
+London TripAdvisor,rating,0.0161,0.0196,negligible
+London TripAdvisor,birank_count,-0.0424,0.0539,negligible
+UK Foursquare,popularity,-0.526,0.6868,medium
+UK Foursquare,birank_count,-0.1603,0.2399,negligible

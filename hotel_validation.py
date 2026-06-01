@@ -424,6 +424,16 @@ for uid in test_uv:
     hybrid_ranking[uid] = blended
 print(f"    hybrid_knn_birank:    {time.time()-t0:.1f}s")
 
+# LightGCN (He et al., SIGIR 2020)
+t0 = time.time()
+try:
+    import sys; sys.path.insert(0, str(DATA_DIR))
+    from lightgcn import build_lightgcn_ranking
+    rankings["lightgcn"] = build_lightgcn_ranking(train, verbose=False)
+    print(f"    lightgcn:             {time.time()-t0:.1f}s")
+except Exception as e:
+    print(f"    lightgcn FAILED: {e}")
+
 # ── Evaluate all methods ───────────────────────────────────────────────────────
 print("\n  Evaluating...")
 results = {}

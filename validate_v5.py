@@ -576,6 +576,28 @@ def run_single_split(interactions, social_df, split_date, verbose=True):
     if verbose:
         print(f"    baselines            {time.time()-t0:>5.1f}s")
 
+    # LightGCN (He et al., SIGIR 2020)
+    t0 = time.time()
+    try:
+        from lightgcn import build_lightgcn_ranking
+        rankings["lightgcn"] = build_lightgcn_ranking(train, verbose=False)
+        if verbose:
+            print(f"    lightgcn             {time.time()-t0:>5.1f}s")
+    except Exception as e:
+        if verbose:
+            print(f"    lightgcn FAILED: {e}")
+
+    # SASRec (Kang & McAuley, ICDM 2018)
+    t0 = time.time()
+    try:
+        from sasrec import build_sasrec_ranking
+        rankings["sasrec"] = build_sasrec_ranking(train, verbose=False)
+        if verbose:
+            print(f"    sasrec               {time.time()-t0:>5.1f}s")
+    except Exception as e:
+        if verbose:
+            print(f"    sasrec FAILED: {e}")
+
     # ---- Evaluate ----
     if verbose:
         print("\n  Evaluating per-user re-ranking...")

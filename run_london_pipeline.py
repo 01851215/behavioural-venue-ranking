@@ -13,6 +13,7 @@ Methods compared:
   birank_count     — standard BiRank, count edges, loyalty priors
   birank_decay     — BiRank, decayed edges, loyalty priors
   birank_explore   — BiRank, decayed edges, exploration priors (Phase 1)
+  lightgcn         — LightGCN (He et al., SIGIR 2020), 3-layer graph convolution
   mf_als           — ALS matrix factorization (implicit library)
   mf_bpr           — BPR matrix factorization
   hybrid_als       — 0.5 * birank_explore + 0.5 * mf_als (min-max normalised)
@@ -443,6 +444,28 @@ if __name__ == "__main__":
         rankings["birank_explore"], rankings["mf_als"], lam=0.5
     )
     print("  ✓ hybrid_explore_als (0.5 × birank_explore + 0.5 × mf_als)")
+
+    # Anti-loyalty + ALS hybrid (NEW — discovered via negative control analysis)
+    # q0[v] = 1/(repeat_user_rate + 0.01): penalises high-revisit venues,
+    # directly targets rising stars (venues gaining fresh visitors)
+    from validate_v5 import build_adjacency, birank as _birank
+    W_al, u2i_al, v2i_al, _, i2v_al = build_adjacency(decayed_edges)
+    rr_map_al = venue_feat.set_index("business_id")["repeat_user_rate"]
+    p0_al = np.ones(len(u2i_al))
+    q0_al = np.clip(np.array([
+        1.0 / (float(rr_map_al.get(i2v_al[i], 0.01) or 0.01) + 0.01)
+        for i in range(len(v2i_al))
+    ]), 1e-10, None)
+    _, q_al = _birank(W_al, p0=p0_al, q0=q0_al)
+    r_anti = {i2v_al[i]: float(q_al[i]) for i in range(len(v2i_al))}
+    rankings["hybrid_anti_loyalty_als"] = blend_rankings(r_anti, rankings["mf_als"], lam=0.5)
+    print("  ✓ hybrid_anti_loyalty_als (anti-loyalty prior + ALS)")
+
+    # LightGCN (He et al., SIGIR 2020)
+    print("  Training LightGCN (3 layers, 64 dim, 50 epochs, MPS)...")
+    from lightgcn import build_lightgcn_ranking
+    rankings["lightgcn"] = build_lightgcn_ranking(train, verbose=True)
+    print("  ✓ lightgcn           (3-layer graph convolution, BPR loss)")
 
     # Baselines
     rankings["baseline_rating"]     = build_rating_ranking(train)

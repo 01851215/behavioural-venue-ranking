@@ -1,0 +1,23 @@
+source,dataset,method,test,p_raw,p_adj_BH,sig_raw_0.05,sig_adj_0.05,survives_BH
+rising_stars_rho,london,baseline_popularity,Spearman ρ (rising stars) ≠ 0,0.187,0.2571,False,False,False
+rising_stars_rho,london,baseline_rating,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,london,birank_count,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,london,birank_decay,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,london,birank_explore,Spearman ρ (rising stars) ≠ 0,0.211,0.2731,False,False,False
+rising_stars_rho,london,mf_als,Spearman ρ (rising stars) ≠ 0,0.943,1.0,False,False,False
+rising_stars_rho,london,mf_bpr,Spearman ρ (rising stars) ≠ 0,0.616,0.7529,False,False,False
+rising_stars_rho,london,hybrid_explore_als,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,london,lightgcn,Spearman ρ (rising stars) ≠ 0,0.015,0.0254,True,True,True
+rising_stars_rho,london,baseline_random,Spearman ρ (rising stars) ≠ 0,1.0,1.0,False,False,False
+rising_stars_rho,uk_fsq,baseline_popularity,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,uk_fsq,birank_count,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,uk_fsq,birank_decay,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,uk_fsq,birank_explore,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,uk_fsq,mf_als,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,uk_fsq,mf_bpr,Spearman ρ (rising stars) ≠ 0,0.981,1.0,False,False,False
+rising_stars_rho,uk_fsq,hybrid_explore_als,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,uk_fsq,lightgcn,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,uk_fsq,sasrec,Spearman ρ (rising stars) ≠ 0,0.0,0.0,True,True,True
+rising_stars_rho,uk_fsq,baseline_random,Spearman ρ (rising stars) ≠ 0,0.97,1.0,False,False,False
+causal_psm,coffee,PSM_ATE,ATE > 0,0.0309,0.0486,True,True,True
+causal_psm,coffee,Mahalanobis_ATE,ATE > 0,0.0355,0.0521,True,False,False

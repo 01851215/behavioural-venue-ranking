@@ -1,0 +1,6 @@
+metric,value
+observed_ate,0.0021321547357917355
+null_mean,5.085317680516912e-05
+null_std,0.0009866595785238928
+observed_percentile,98.9
+p_value_one_tailed,0.010999999999999899

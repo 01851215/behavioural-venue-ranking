@@ -19,7 +19,10 @@ DATA_DIR      = Path(__file__).parent
 REVIEW_PATH   = DATA_DIR / "../yelp_dataset/yelp_academic_dataset_review.json"
 COFFEE_PATH   = DATA_DIR / "business_coffee_v2.csv"
 FEATURES_PATH = DATA_DIR / "coffee_venue_features_v2.csv"
-SPLIT_DATE    = "2018-01-01"  # Changed from 2020-01-01: avoids COVID compression, gives 4-year outcome window (2018-2022)
+SPLIT_DATE    = "2018-01-01"   # End of pre-period (treatment features measured before this)
+COVID_START   = "2019-11-01"   # Outcome window capped here — first COVID cases reported Nov 2019
+                               # Outcome = fraction of pre-2018 users who returned 2018-01-01 to 2019-10-31
+                               # This is the only window completely free of lockdown/closure effects
 
 CONFOUNDER_COLS = ["total_visits", "unique_users", "gini_user_contribution"]
 
@@ -100,13 +103,22 @@ def build_causal_dataset(df: pd.DataFrame, future_revisit_rates: dict) -> pd.Dat
     return result.reset_index(drop=True)
 
 
-def load_coffee_reviews(review_path: Path, coffee_ids: set, split_date: str = SPLIT_DATE):
+def load_coffee_reviews(review_path: Path, coffee_ids: set,
+                        split_date: str = SPLIT_DATE,
+                        covid_start: str = COVID_START):
     """
-    Stream Yelp review JSON. Returns (pre_users, post_users) dicts:
-      pre_users[venue_id]  = set of user_ids who visited before split_date
-      post_users[venue_id] = set of user_ids who visited on/after split_date
+    Stream Yelp review JSON. Returns (pre_users, post_users) dicts.
+
+    pre_users[bid]  = users who visited BEFORE split_date
+    post_users[bid] = users who visited BETWEEN split_date and covid_start (exclusive)
+
+    The outcome window [split_date, covid_start) is deliberately pre-COVID
+    (Nov 2019 cap) to avoid confounding from lockdown closures. Reviews after
+    covid_start are ignored entirely.
     """
     print(f"Streaming {review_path} (5.3 GB — takes ~2 min)...")
+    print(f"  Pre-period:    before {split_date}")
+    print(f"  Outcome window: {split_date}  →  {covid_start}  (pre-COVID only)")
     pre_users  = defaultdict(set)
     post_users = defaultdict(set)
     n_total = n_coffee = 0
@@ -123,15 +135,17 @@ def load_coffee_reviews(review_path: Path, coffee_ids: set, split_date: str = SP
             date = row["date"]
             if date < split_date:
                 pre_users[bid].add(uid)
-            else:
+            elif date < covid_start:
+                # Only count post-split visits that are PRE-COVID
                 post_users[bid].add(uid)
+            # Reviews on/after covid_start are ignored
 
             if n_total % 1_000_000 == 0:
                 print(f"  {n_total/1e6:.0f}M reviews processed, {n_coffee:,} coffee...")
 
     print(f"  Done. {n_total:,} reviews scanned, {n_coffee:,} coffee.")
-    print(f"  Venues with pre-2020 users:  {len(pre_users):,}")
-    print(f"  Venues with post-2020 users: {len(post_users):,}")
+    print(f"  Venues with pre-{split_date[:4]} users:  {len(pre_users):,}")
+    print(f"  Venues with outcome-window users: {len(post_users):,}")
     return dict(pre_users), dict(post_users)
 
 

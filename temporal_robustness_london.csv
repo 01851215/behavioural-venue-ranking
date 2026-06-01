@@ -1,0 +1,6 @@
+dataset,split_date,n_train,n_revisit_users,hybrid_rho,hybrid_p,hybrid_ndcg10,popularity_rho,popularity_p,popularity_ndcg10,random_rho,random_p,random_ndcg10
+London TripAdvisor,2016-07-01,417403,6537,0.0899,0.0005,0.6071,0.0238,0.3551,0.6084,-0.03,0.2452,0.5845
+London TripAdvisor,2017-01-01,502245,6769,0.124,0.0,0.5919,0.039,0.1198,0.5935,-0.0242,0.3346,0.5702
+London TripAdvisor,2017-07-01,583702,6689,0.0643,0.009,0.5723,0.0216,0.3801,0.5731,-0.0182,0.4588,0.5492
+London TripAdvisor,2018-01-01,659305,6328,0.0943,0.0001,0.5592,0.032,0.1869,0.5571,-0.0129,0.5942,0.5382
+London TripAdvisor,2018-07-01,730066,5598,0.1791,0.0,0.5397,0.0264,0.2691,0.5384,-0.0147,0.5394,0.5171

@@ -1,21 +1,25 @@
 method,group,NDCG@10,n_users
 hotel_birank,Budget Explorers,0.0637997829034714,1145
+hotel_birank,One-Time Tourists,0.14642199407581236,451
+hotel_birank,One-Time Tourists (Business),0.29531607982456853,57
 hotel_birank,Leisure Travelers,0.32084509189895827,41
-hotel_birank,One-Time Tourists,0.14642199407581233,451
-hotel_birank,One-Time Tourists (Business),0.2953160798245686,57
 hotel_birank_fsq,Budget Explorers,0.0637997829034714,1145
+hotel_birank_fsq,One-Time Tourists,0.14642199407581236,451
+hotel_birank_fsq,One-Time Tourists (Business),0.29531607982456853,57
 hotel_birank_fsq,Leisure Travelers,0.32084509189895827,41
-hotel_birank_fsq,One-Time Tourists,0.14642199407581233,451
-hotel_birank_fsq,One-Time Tourists (Business),0.2953160798245686,57
-baseline_rating,Budget Explorers,0.056740948976952595,1145
-baseline_rating,Leisure Travelers,0.32084509189895827,41
-baseline_rating,One-Time Tourists,0.13417865865437553,451
-baseline_rating,One-Time Tourists (Business),0.3212157462406066,57
-baseline_popularity,Budget Explorers,0.0628157740176676,1145
+baseline_rating,Budget Explorers,0.0563942879962138,1145
+baseline_rating,One-Time Tourists,0.13619417072506154,451
+baseline_rating,One-Time Tourists (Business),0.3147408296365971,57
+baseline_rating,Leisure Travelers,0.3298468052264837,41
+baseline_popularity,Budget Explorers,0.06281577401766758,1145
+baseline_popularity,One-Time Tourists,0.14751031343174426,451
+baseline_popularity,One-Time Tourists (Business),0.29531607982456853,57
 baseline_popularity,Leisure Travelers,0.31184337857143285,41
-baseline_popularity,One-Time Tourists,0.14735660291749456,451
-baseline_popularity,One-Time Tourists (Business),0.2953160798245686,57
 baseline_random,Budget Explorers,0.05947956842967458,1145
-baseline_random,Leisure Travelers,0.30284166524390743,41
-baseline_random,One-Time Tourists,0.14359741160058193,451
+baseline_random,One-Time Tourists,0.14359741160058195,451
 baseline_random,One-Time Tourists (Business),0.3406404960526352,57
+baseline_random,Leisure Travelers,0.3028416652439074,41
+lightgcn,Budget Explorers,0.06051444238961247,1145
+lightgcn,One-Time Tourists,0.1430836822049937,451
+lightgcn,One-Time Tourists (Business),0.2735943167919881,57
+lightgcn,Leisure Travelers,0.29383995191638196,41

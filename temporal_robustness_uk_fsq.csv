@@ -1,0 +1,5 @@
+dataset,split_date,n_train,n_revisit_users,hybrid_rho,hybrid_p,hybrid_ndcg10,popularity_rho,popularity_p,popularity_ndcg10,random_rho,random_p,random_ndcg10
+UK Foursquare,2013-01-01,169600,1857,-0.0089,0.2207,0.3434,-0.2899,0.0,0.4443,-0.0005,0.9442,0.2879
+UK Foursquare,2013-04-01,213192,1786,0.0172,0.0264,0.2902,-0.3135,0.0,0.3956,0.0081,0.297,0.2401
+UK Foursquare,2013-07-01,250097,1509,0.0401,0.0,0.215,-0.3603,0.0,0.316,0.0038,0.6848,0.1735
+UK Foursquare,2013-10-01,274393,1125,0.0965,0.0,0.1694,-0.4052,0.0,0.2593,-0.0033,0.8031,0.1395

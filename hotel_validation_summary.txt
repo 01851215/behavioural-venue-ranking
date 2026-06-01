@@ -2,14 +2,15 @@ HOTEL MODEL VALIDATION SUMMARY
 Split: 2020-01-01  |  Train: 224,216  |  Test: 31,973  |  Overlap: 3,578 users
 
 BEST METHOD: hybrid_knn_birank
-  NDCG@10 = 0.119959  95% CI [0.1097, 0.1300]
+  NDCG@10 = 0.119959  95% CI [0.1100, 0.1299]
 
 ALL RESULTS:
-  hybrid_knn_birank              NDCG@10=0.1200  p=8.432e-03
-  baseline_item_knn              NDCG@10=0.1187  p=1.937e-02
-  baseline_ease                  NDCG@10=0.1181  p=2.427e-02
+  hybrid_knn_birank              NDCG@10=0.1200  p=6.326e-03
+  baseline_item_knn              NDCG@10=0.1186  p=1.070e-02
+  baseline_ease                  NDCG@10=0.1181  p=8.650e-03
   hotel_birank                   NDCG@10=0.0998  p=ref
   hotel_birank_fsq               NDCG@10=0.0998  p=1.000e+00
-  baseline_popularity            NDCG@10=0.0992  p=2.861e-01
+  baseline_popularity            NDCG@10=0.0992  p=3.246e-01
   baseline_random                NDCG@10=0.0972  p=4.712e-01
-  baseline_rating                NDCG@10=0.0926  p=1.288e-02
+  lightgcn                       NDCG@10=0.0953  p=3.736e-02
+  baseline_rating                NDCG@10=0.0930  p=1.771e-02

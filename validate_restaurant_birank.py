@@ -265,6 +265,16 @@ if __name__ == "__main__":
     rankings["baseline_popularity"] = build_popularity_ranking(train)
     print("  ✓ baselines (rating, popularity)")
 
+    # LightGCN (He et al., SIGIR 2020)
+    try:
+        import sys; sys.path.insert(0, str(DATA_DIR))
+        from lightgcn import build_lightgcn_ranking
+        print("  Training LightGCN...")
+        rankings["lightgcn"] = build_lightgcn_ranking(train, verbose=True)
+        print("  ✓ lightgcn")
+    except Exception as e:
+        print(f"  lightgcn FAILED: {e}")
+
     # 6. Evaluate
     print(f"\nEvaluating {len(test_uv):,} users...")
     all_results = {}

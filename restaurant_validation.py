@@ -18,6 +18,8 @@ from collections import defaultdict
 import math
 from scipy import sparse
 
+np.random.seed(42)   # reproducibility
+
 # ── Paths ──
 BASE = Path(__file__).resolve().parent
 USR_FILE = BASE / "restaurant_user_profiles.csv"

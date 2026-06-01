@@ -1,0 +1,58 @@
+==========================================================================================
+UK FOURSQUARE BIRANK VALIDATION — Exploration priors + MF hybrid
+Data: FSQ WWW2019 GB check-ins (Apr 2012 – Jan 2014)  |  Split: 2013-07-01
+Train: 250,097  |  Venues: 63,506  |  Users: 5,685
+No star ratings — check-in frequency only (rating baseline omitted)
+==========================================================================================
+
+  PRIMARY — Rising Stars residual correlation (popularity-debiased)
+  Method                         ρ (rising)      p-value
+  -------------------------------------------------------
+  birank_count                      -0.0382       0.0000 ***
+  birank_decay                      -0.0399       0.0000 ***
+  birank_explore                    +0.0368       0.0001 ***
+  mf_als                            -0.3375       0.0000 ***
+  mf_bpr                            -0.0002       0.9807
+  hybrid_explore_als                +0.0401       0.0000 ***
+  baseline_popularity               -0.3603       0.0000 ***
+  lightgcn                          -0.1019       0.0000 ***
+
+  SECONDARY — Raw test-traffic Spearman ρ
+  Method                        ρ (traffic)      p-value
+  -------------------------------------------------------
+  birank_count                      +0.0289       0.0018 *
+  birank_decay                      +0.0293       0.0015 *
+  birank_explore                    -0.0923       0.0000 ***
+  mf_als                            +0.3870       0.0000 ***
+  mf_bpr                            +0.0109       0.2414
+  hybrid_explore_als                -0.0386       0.0000 ***
+  baseline_popularity               +0.4575       0.0000 ***
+  lightgcn                          +0.1666       0.0000 ***
+
+  TERTIARY — NDCG@10 on revisit subset
+  Method                          NDCG@10     Hit@10
+  ----------------------------------------------------
+  birank_count                     0.2665     0.7338
+  birank_decay                     0.2660     0.7371
+  birank_explore                   0.1262     0.4441
+  mf_als                           0.2819     0.7211
+  mf_bpr                           0.2228     0.6435
+  hybrid_explore_als               0.2150     0.5839
+  baseline_popularity              0.3153     0.7666
+  lightgcn                         0.2374     0.6375
+
+  HEADLINE — Rising-stars ρ (value added beyond popularity baseline)
+  Method                         ρ (rising)  Note
+  -----------------------------------------------------------------
+  birank_count                      -0.0382  loyalty priors, count edges
+  birank_decay                      -0.0399  loyalty priors, decayed edges
+  birank_explore                    +0.0368  exploration priors
+  mf_als                            -0.3375  ALS latent factors
+  mf_bpr                            -0.0002  BPR latent factors
+  hybrid_explore_als                +0.0401  *** WINNER CANDIDATE: explore + ALS ***
+  baseline_popularity               -0.3603  reference (0 by construction)
+  lightgcn                          -0.1019  
+
+  Winner: hybrid_explore_als  (ρ = +0.0401)
+  Hybrid beats popularity baseline by Δρ = +0.4004
+==========================================================================================
