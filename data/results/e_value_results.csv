@@ -1,0 +1,2 @@
+ate,baseline_rate,risk_ratio,e_value_point,e_value_ci,interpretation,note
+0.002679,0.007688,1.3485,2.0339,1.2145,Moderately robust — confounder would need RR ≥ 1.5,An unmeasured confounder would need RR ≥ 2.03 with BOTH treatment AND outcome to explain away the point estimate. The CI boundary requires RR ≥ 1.21.

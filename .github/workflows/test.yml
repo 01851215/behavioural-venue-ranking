@@ -1,0 +1,53 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements-lock.txt') }}
+
+    - name: Install dependencies
+      run: |
+        pip install -e .
+        pip install pytest pytest-cov
+
+    - name: Run unit tests
+      run: |
+        pytest tests/ -q --tb=short
+
+    - name: Test core imports
+      run: |
+        python -c "from bvr.core.validation import evaluate_per_user; print('bvr.core OK')"
+        python -c "from bvr.models.lightgcn import build_lightgcn_ranking; print('lightgcn OK')"
+        python -c "from temporal.metrics.lte import lead_time_to_emergence; print('temporal OK')"
+        python -c "from causal_v2.estimators.doubly_robust import estimate_ate_dr; print('causal_v2 OK')"
+        python -c "from fairness.metrics.disadvantage import long_tail_ranking_gap; print('fairness OK')"
+        python -c "from emergerec.benchmark import run; print('emergerec OK')"
+
+    - name: Upload coverage
+      uses: codecov/codecov-action@v4
+      if: matrix.python-version == '3.11'
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false

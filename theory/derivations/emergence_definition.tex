@@ -1,0 +1,116 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{hyperref}
+
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+\newtheorem{proposition}{Proposition}
+
+\title{Formal Definition of Venue Emergence}
+\author{Behavioral Venue Ranking Project}
+\date{2026}
+
+\begin{document}
+\maketitle
+
+\section{Notation}
+
+Let $\mathcal{V}$ be a set of venues and $\mathcal{U}$ a set of users.
+An interaction dataset $\mathcal{D} = \{(u, v, t) : u \in \mathcal{U}, v \in \mathcal{V}, t \in \mathbb{R}\}$
+records that user $u$ visited venue $v$ at time $t$.
+
+For a venue $v$ and time window $[a, b)$, define the \textbf{traffic rate}:
+\begin{equation}
+    r(v, a, b) = \frac{|\{(u, v, t) \in \mathcal{D} : a \leq t < b\}|}{b - a}
+\end{equation}
+
+\section{Popularity Baseline Prediction}
+
+Let the \textbf{popularity baseline} for venue $v$ at time $t$ be the
+OLS-predicted log-traffic from its historical log-traffic:
+\begin{equation}
+    \hat{r}(v, t) = \exp\!\left(\hat{\alpha} + \hat{\beta} \log r(v, t_0, t)\right)
+\end{equation}
+where $\hat{\alpha}, \hat{\beta}$ are estimated by OLS regression of
+$\log r(v, t, t{+}w)$ on $\log r(v, t_0, t)$ across all venues $v \in \mathcal{V}$.
+
+The \textbf{rising-stars residual} for venue $v$ is:
+\begin{equation}
+    \varepsilon(v) = \log r(v, t, t{+}w) - \hat{r}(v, t)
+\end{equation}
+
+\section{Formal Definition of Emergence}
+
+\begin{definition}[Venue Emergence]
+A venue $v \in \mathcal{V}$ is said to \textbf{emerge} at time $t_e$ if:
+\begin{enumerate}
+    \item The traffic rate in a post-split window exceeds the popularity-baseline
+          prediction by at least $\sigma$ standard deviations:
+          \begin{equation}
+              \varepsilon(v) \geq \sigma \cdot \text{std}_{v' \in \mathcal{V}} \varepsilon(v')
+          \end{equation}
+    \item This excess persists for at least $k$ consecutive evaluation windows
+          of width $w$ days.
+    \item The pre-split traffic rate is non-negligible:
+          $r(v, t_0, t_e) > r_{\min}$ for some threshold $r_{\min} > 0$.
+\end{enumerate}
+We write $\text{Emerge}(v) = 1$ if all three conditions hold; $0$ otherwise.
+\end{definition}
+
+\begin{remark}
+Default hyperparameters: $\sigma = 1.0$, $k = 1$, $w = 90$ days,
+$r_{\min} = 0.1$ interactions/day.
+These are validated empirically on the UK Foursquare dataset
+(see \texttt{temporal/metrics/emergence\_events.py}).
+\end{remark}
+
+\section{The Rising-Stars Metric}
+
+\begin{definition}[Rising-Stars Spearman $\rho$]
+For a ranking model $f : \mathcal{V} \to \mathbb{R}$ that assigns scores to venues,
+the \textbf{rising-stars metric} is:
+\begin{equation}
+    \rho_{\text{rs}}(f) = \text{Spearman}\!\left(\{f(v)\}_{v \in \mathcal{V}},\;
+    \{\varepsilon(v)\}_{v \in \mathcal{V}}\right)
+\end{equation}
+where $\text{Spearman}(\cdot, \cdot)$ is the rank correlation coefficient.
+\end{definition}
+
+\begin{proposition}[Popularity Invariance]
+Under any monotone transformation of the popularity baseline $\hat{r}$,
+$\rho_{\text{rs}}$ is invariant. Specifically, if $\hat{r}'(v) = g(\hat{r}(v))$
+for any monotone $g$, then $\rho_{\text{rs}}$ is unchanged.
+\end{proposition}
+
+\begin{proof}
+The OLS regression of log-traffic on log-traffic produces residuals $\varepsilon(v)$
+that are uncorrelated with $\hat{r}(v)$ by construction (OLS residual orthogonality).
+Monotone transformations of $\hat{r}$ do not change the rank ordering of $\varepsilon(v)$,
+and Spearman correlation depends only on ranks. $\square$
+\end{proof}
+
+\begin{proposition}[Relation to NDCG]
+$\rho_{\text{rs}}(f)$ and $\text{NDCG}@k(f)$ measure orthogonal properties:
+$\rho_{\text{rs}}$ measures discovery of emerging venues;
+$\text{NDCG}@k$ measures prediction of individual revisits.
+A model can achieve high NDCG while $\rho_{\text{rs}} < 0$
+(as demonstrated by LightGCN on both UK datasets).
+\end{proposition}
+
+\section{Axiomatic Justification}
+
+The rising-stars metric satisfies three desiderata for emergence detection:
+
+\textbf{A1 (Popularity invariance):} A method that perfectly predicts popularity
+receives $\rho_{\text{rs}} = 0$, not a positive value. \\
+
+\textbf{A2 (Monotonicity in growth):} If venue $v_1$ grows faster than venue $v_2$
+beyond their respective baselines ($\varepsilon(v_1) > \varepsilon(v_2)$),
+then any method that ranks $v_1$ above $v_2$ is rewarded. \\
+
+\textbf{A3 (Identifiability):} Under standard OLS assumptions
+(homoscedastic residuals, no omitted polynomial terms),
+$\varepsilon(v)$ is a consistent estimator of the causal component of growth
+unexplained by historical popularity.
+
+\end{document}

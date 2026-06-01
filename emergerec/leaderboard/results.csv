@@ -1,0 +1,13 @@
+dataset,method,rising_stars_rho,rho_p_value,rho_sig,ndcg@10,ndcg_ci_lo,ndcg_ci_hi,hit@10
+uk_foursquare,baseline_popularity,-0.3603,0.0,***,0.3154,0.3002,0.3297,0.7666
+uk_foursquare,baseline_random,0.0038,0.6848,ns,0.1735,0.163,0.1846,0.5652
+uk_foursquare,birank_loyalty,-0.0399,0.0,***,0.2681,0.2559,0.2811,0.7425
+uk_foursquare,birank_explore,0.0368,0.0001,***,0.1254,0.1148,0.1353,0.4368
+uk_foursquare,hybrid_explore_als,0.0401,0.0,***,0.215,0.1996,0.2278,0.5839
+uk_foursquare,hybrid_anti_loyalty_als,0.2097,0.0,***,0.1218,0.1099,0.1325,0.3666
+tripadvisor_london,baseline_popularity,0.032,0.1869,ns,0.5571,0.5484,0.5648,0.9025
+tripadvisor_london,baseline_random,-0.0129,0.5942,ns,0.5382,0.5292,0.5472,0.8791
+tripadvisor_london,birank_loyalty,-0.2098,0.0,***,0.5711,0.5621,0.579,0.8955
+tripadvisor_london,birank_explore,-0.0303,0.2112,ns,0.5314,0.5221,0.54,0.8569
+tripadvisor_london,hybrid_explore_als,0.0943,0.0001,***,0.5592,0.5504,0.5674,0.9052
+tripadvisor_london,hybrid_anti_loyalty_als,0.2437,0.0,***,0.5413,0.532,0.551,0.8947

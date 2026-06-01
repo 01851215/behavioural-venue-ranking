@@ -1,0 +1,6 @@
+cluster,label,n_users,ndcg10,hit10,is_loyalist
+0,Cluster 0 (held-out),191,0.7044,1.0,False
+1,Cluster 1 (held-out),93,,,False
+2,Cluster 2 (held-out),63,0.2759,0.619,False
+3,Loyalist (held-out),41,0.7093,1.0,True
+-1,All held-out,388,0.6113,0.9167,False

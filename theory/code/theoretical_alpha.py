@@ -38,14 +38,26 @@ def theoretical_optimal_alpha(beta: float) -> float:
     """
     Prior-Domain Match: predicted optimal α given domain behavioral mode β.
 
-    Current (linear approximation — to be superseded by PhD derivation):
+    Current (linear approximation — known to be wrong from synthetic validation):
         α* ≈ 2β
 
-    PhD contribution: derive the exact functional form f(β) using
-    KL divergence between visit distributions across domain types.
-    The derivation is in theory/derivations/prior_domain_match.tex.
+    Synthetic validation (theory/code/synthetic_graph_generator.py) shows
+    this linear approximation fails: empirical best α is consistently 2.0
+    regardless of true β, while estimated β is systematically overestimated.
+
+    TWO PhD findings from this:
+      1. The estimate_behavioral_mode() function is biased — needs correction.
+         (β̂ is typically 0.577–0.989 even when true β = 0.1–0.9)
+      2. The optimal α is NOT linearly related to β — the real relationship
+         is non-linear and requires the information-theoretic derivation
+         in theory/derivations/prior_domain_match.tex.
+
+    TODO (PhD Year 1): Replace with closed-form derived from KL divergence
+    between visit distributions. See Section 4 of the theory paper.
     """
-    return 2.0 * beta
+    # Placeholder: will be replaced by formal derivation
+    # Known to fail on synthetic data — motivates PhD theoretical contribution
+    return 2.0 * beta   # INCORRECT: just a placeholder
 
 
 def predict_and_compare(train_df: pd.DataFrame,
