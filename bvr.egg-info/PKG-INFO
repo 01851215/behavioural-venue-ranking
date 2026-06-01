@@ -1,0 +1,24 @@
+Metadata-Version: 2.4
+Name: bvr
+Version: 0.2.0
+Summary: Behavioral Venue Ranking — emergence-aware bipartite graph ranking
+Author: Chris Liu
+Requires-Python: >=3.9
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: scipy
+Requires-Dist: scikit-learn
+Requires-Dist: torch
+Requires-Dist: streamlit
+Requires-Dist: altair
+Requires-Dist: folium
+Requires-Dist: streamlit-folium
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: duckdb
+Dynamic: author
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

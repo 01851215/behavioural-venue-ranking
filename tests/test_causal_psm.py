@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from causal_psm import (
+from bvr.causal.psm import (
     fit_propensity_model,
     nearest_neighbour_match,
     compute_smd,

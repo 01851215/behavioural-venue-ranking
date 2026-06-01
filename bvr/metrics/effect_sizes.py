@@ -21,14 +21,13 @@ from pathlib import Path
 from scipy.stats import wilcoxon
 
 warnings.filterwarnings("ignore")
-sys.path.insert(0, str(Path(__file__).parent))
-from validate_v5 import evaluate_per_user
-from run_london_pipeline import temporal_split
-from lightgcn import build_lightgcn_ranking
-from run_london_pipeline import (
+from bvr.core.validation import evaluate_per_user
+from bvr.pipelines.london import temporal_split
+from bvr.models.lightgcn import build_lightgcn_ranking
+from bvr.pipelines.london import (
     build_birank_explore, build_mf_ranking, blend_rankings
 )
-from validate_v5 import (
+from bvr.core.validation import (
     compute_user_features, compute_venue_features,
     build_count_edges, build_decayed_edges,
     build_birank_ranking, build_popularity_ranking, build_rating_ranking

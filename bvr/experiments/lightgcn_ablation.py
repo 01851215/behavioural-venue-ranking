@@ -12,12 +12,11 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
 warnings.filterwarnings("ignore")
 
-from lightgcn import build_lightgcn_ranking
-from validate_v5 import evaluate_per_user
-from run_london_pipeline import temporal_split, compute_rising_stars, spearman_rising
+from bvr.models.lightgcn import build_lightgcn_ranking
+from bvr.core.validation import evaluate_per_user
+from bvr.pipelines.london import temporal_split, compute_rising_stars, spearman_rising
 
 DATA_DIR = Path(__file__).parent
 LAYERS   = [1, 2, 3, 4, 5]

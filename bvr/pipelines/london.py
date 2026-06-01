@@ -33,8 +33,7 @@ from scipy import sparse
 from scipy.stats import wilcoxon
 
 # Import core functions from the validated v5 pipeline (no duplication)
-sys.path.insert(0, str(Path(__file__).parent))
-from validate_v5 import (
+from bvr.core.validation import (
     corrected_burstiness,
     compute_user_features,
     compute_venue_features,
@@ -448,7 +447,7 @@ if __name__ == "__main__":
     # Anti-loyalty + ALS hybrid (NEW — discovered via negative control analysis)
     # q0[v] = 1/(repeat_user_rate + 0.01): penalises high-revisit venues,
     # directly targets rising stars (venues gaining fresh visitors)
-    from validate_v5 import build_adjacency, birank as _birank
+    from bvr.core.validation import build_adjacency, birank as _birank
     W_al, u2i_al, v2i_al, _, i2v_al = build_adjacency(decayed_edges)
     rr_map_al = venue_feat.set_index("business_id")["repeat_user_rate"]
     p0_al = np.ones(len(u2i_al))

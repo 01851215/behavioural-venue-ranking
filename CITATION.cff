@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Behavioral Venue Ranking: Emergence-Aware Bipartite Graph Ranking"
+version: 0.2.0
+date-released: "2026-06-01"
+abstract: >
+  A research codebase for emergence-aware venue recommendation.
+  Introduces the rising-stars evaluation metric (popularity-debiased
+  Spearman ρ), anti-loyalty behavioral priors, and a validated
+  pipeline across 5 domains (coffee shops, restaurants, hotels,
+  London tourists, UK Foursquare check-ins).
+authors:
+  - family-names: "Liu"
+    given-names: "Chris"
+license: MIT
+repository-code: "https://github.com/chrisliu/behavioural-venue-ranking"
+keywords:
+  - recommender-systems
+  - bipartite-graph-ranking
+  - behavioral-signals
+  - venue-recommendation
+  - rising-stars-detection
+  - emergence-detection

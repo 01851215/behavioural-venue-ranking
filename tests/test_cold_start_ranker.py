@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from cold_start_ranker import (
+from bvr.models.cold_start import (
     split_warm_cold,
     train_calibration_model,
     predict_pseudo_scores,

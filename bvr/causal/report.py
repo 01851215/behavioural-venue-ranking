@@ -8,7 +8,7 @@ Writes: causal_results.txt
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from causal_psm import estimate_ate, mahalanobis_match, CONFOUNDER_COLS
+from bvr.causal.psm import estimate_ate, mahalanobis_match, CONFOUNDER_COLS
 
 DATA_DIR = Path(__file__).parent
 

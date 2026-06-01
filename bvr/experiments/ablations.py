@@ -18,14 +18,13 @@ import pandas as pd
 from pathlib import Path
 from scipy.stats import spearmanr
 
-sys.path.insert(0, str(Path(__file__).parent))
 warnings.filterwarnings("ignore")
 
-from validate_v5 import (
+from bvr.core.validation import (
     compute_user_features, compute_venue_features,
     build_decayed_edges, build_adjacency, birank, evaluate_per_user,
 )
-from run_london_pipeline import (
+from bvr.pipelines.london import (
     temporal_split, compute_rising_stars, spearman_rising,
 )
 

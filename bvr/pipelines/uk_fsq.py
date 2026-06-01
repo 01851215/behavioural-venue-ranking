@@ -34,8 +34,7 @@ from pathlib import Path
 from scipy import sparse
 from scipy.stats import wilcoxon
 
-sys.path.insert(0, str(Path(__file__).parent))
-from validate_v5 import (
+from bvr.core.validation import (
     corrected_burstiness,
     compute_user_features,
     compute_venue_features,
@@ -51,7 +50,7 @@ from validate_v5 import (
     build_adjacency,
 )
 # Reuse helpers from London pipeline
-from run_london_pipeline import (
+from bvr.pipelines.london import (
     temporal_split,
     compute_rising_stars,
     spearman_rising,
@@ -224,7 +223,7 @@ if __name__ == "__main__":
     print("  ✓ baseline_popularity  (no rating baseline — FSQ has no stars)")
 
     # Anti-loyalty + ALS hybrid
-    from validate_v5 import build_adjacency, birank as _birank
+    from bvr.core.validation import build_adjacency, birank as _birank
     import numpy as _np
     W_al, u2i_al, v2i_al, _, i2v_al = build_adjacency(decayed_edges)
     rr_map_al = venue_feat.set_index("business_id")["repeat_user_rate"]

@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from compute_anonymous_venue_signals import (
+from bvr.experiments.compute_anonymous_signals import (
     compute_checkin_burstiness,
     compute_peak_hour_entropy,
     compute_weekday_ratio,

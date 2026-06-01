@@ -1,0 +1,12 @@
+numpy
+pandas
+scipy
+scikit-learn
+torch
+streamlit
+altair
+folium
+streamlit-folium
+fastapi
+uvicorn
+duckdb

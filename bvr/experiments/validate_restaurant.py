@@ -29,8 +29,7 @@ import pandas as pd
 from pathlib import Path
 from scipy.stats import wilcoxon
 
-sys.path.insert(0, str(Path(__file__).parent))
-from validate_v5 import (
+from bvr.core.validation import (
     compute_user_features,
     compute_venue_features,
     build_count_edges,

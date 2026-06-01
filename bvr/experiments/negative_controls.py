@@ -18,14 +18,13 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
 warnings.filterwarnings("ignore")
 
-from validate_v5 import (
+from bvr.core.validation import (
     compute_user_features, compute_venue_features,
     build_decayed_edges, build_adjacency, birank, evaluate_per_user,
 )
-from run_london_pipeline import (
+from bvr.pipelines.london import (
     temporal_split, compute_rising_stars, spearman_rising,
 )
 
@@ -86,7 +85,7 @@ def run_inverted_prior(interactions_file, split_date, label, has_stars=True):
     print(f"  inverted_loyal_prior: ρ={rho:+.4f} (p={pval:.4f})  NDCG={agg.get('NDCG@10',0):.4f}")
 
     # 3. Reference: correct exploration prior (α=1.0)
-    from run_london_pipeline import build_birank_explore
+    from bvr.pipelines.london import build_birank_explore
     r_correct = build_birank_explore(decay_e, user_feat, venue_feat)
     rho, pval = spearman_rising(r_correct, rising)
     agg, _, _ = evaluate_per_user(r_correct, train_uv, test_uv_rev)

@@ -16,14 +16,13 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
 warnings.filterwarnings("ignore")
 
-from validate_v5 import (
+from bvr.core.validation import (
     compute_user_features, compute_venue_features,
     build_decayed_edges, build_popularity_ranking, evaluate_per_user,
 )
-from run_london_pipeline import (
+from bvr.pipelines.london import (
     temporal_split, compute_rising_stars, spearman_rising,
     build_birank_explore, build_mf_ranking, blend_rankings,
 )

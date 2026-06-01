@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from causal_data_prep import (
+from bvr.causal.data_prep import (
     compute_consistency_score,
     compute_future_revisit_rate,
     build_causal_dataset,
