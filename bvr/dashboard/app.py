@@ -728,6 +728,8 @@ def load_data(domain: str, score_version: str = "v3"):
     for extra in [s_df, base_df, v3_df, v2_df, exp_df]:
         if not extra.empty and "business_id" in extra.columns:
             merged = merged.merge(extra, on="business_id", how="left", suffixes=("", "_dup"))
+            dup_cols = [c for c in merged.columns if c.endswith("_dup")]
+            merged = merged.drop(columns=dup_cols)
 
     # Merge social signals (friend_checkin_count, social_unique_visitors, etc.)
     if not social_df.empty and "yelp_business_id" in social_df.columns:
