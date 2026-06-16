@@ -21,13 +21,15 @@ hotel_interactions.csv
 hotel_user_groups.csv
 hotel_user_features.csv
 hotel_birank_user_scores.csv
-# Raw interaction logs (>100MB)
+# Raw interaction logs (too large for GitHub)
 coffee_interactions.csv
 coffee_visits_raw.csv
 london_reviews_raw.csv
 london_interactions.csv
+london_user_features.csv
 uk_fsq_interactions.csv
 anonymous_venue_signals.csv
+tokyo_fsq_interactions.csv
 # Large user feature/group files (not loaded by dashboard)
 coffee_user_features_v2.csv
 coffee_user_features_v3.csv
