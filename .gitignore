@@ -14,13 +14,25 @@ tl-dataset-US-*/
 *.parquet
 *.pdf
 
-# Large interaction/user files (not needed for dashboard)
+# Large raw/interaction/user files (not needed for dashboard, exceed GitHub 100MB limit)
 restaurant_interactions.csv
 restaurant_user_profiles.csv
 hotel_interactions.csv
 hotel_user_groups.csv
 hotel_user_features.csv
 hotel_birank_user_scores.csv
+# Raw interaction logs (>100MB)
+coffee_interactions.csv
+coffee_visits_raw.csv
+london_reviews_raw.csv
+london_interactions.csv
+uk_fsq_interactions.csv
+anonymous_venue_signals.csv
+# Large user feature/group files (not loaded by dashboard)
+coffee_user_features_v2.csv
+coffee_user_features_v3.csv
+coffee_user_groups.csv
+coffee_birank_user_scores_v4.csv
 
 # LLM simulation secrets
 llm_simulation/.env
@@ -35,3 +47,4 @@ __pycache__/
 
 # Allow all other CSVs, PKL, JSON needed by the dashboard
 # (coffee scores, hotel scores, restaurant scores, venue features, city index, etc.)
+.gstack/
