@@ -2555,6 +2555,14 @@ def load_london_tripadvisor() -> pd.DataFrame:
         ).reset_index()
         df = df.merge(counts, on="business_id", how="left")
         df["avg_stars"] = df["avg_stars"].round(2)
+    else:
+        # london_interactions.csv is a 47MB raw file excluded from the git repo
+        # (see .gitignore) and is therefore unavailable on Streamlit Cloud.
+        # Without it, review counts / average stars simply aren't computable,
+        # so degrade gracefully instead of letting downstream column
+        # selections raise a KeyError.
+        df["review_count"] = np.nan
+        df["avg_stars"] = np.nan
     return df
 
 
@@ -2869,6 +2877,11 @@ def render_london_dashboard() -> None:
 
         if rank_cat == "Restaurants (TripAdvisor BiRank)" and not ta.empty:
             st.caption("BiRank scores from 997K TripAdvisor reviews · 2018-01-01 split · London restaurants")
+            if ta["review_count"].isna().all():
+                st.caption(
+                    "⚠️ Review counts / average stars unavailable in this deployment "
+                    "(raw interactions file is excluded from the repo). BiRank ranking is unaffected."
+                )
             rank_method = st.radio("Sort by", ["BiRank", "Reviews", "Stars"],
                                    horizontal=True, key="ta_sort")
             n = st.slider("Top N", 10, 100, 30, key="ta_n")
