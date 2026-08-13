@@ -3260,8 +3260,17 @@ def render_london_dashboard() -> None:
                     pass
                 return "background-color:#fff3cd"
 
+            # Styler.applymap was renamed to Styler.map in pandas 2.1 and removed
+            # in later releases; requirements.txt has no upper pin, so Streamlit
+            # Cloud may install either API depending on deploy date. Support both.
+            styler = val_df.style
+            try:
+                styler = styler.map(_colour_rho, subset=["Δρ"])
+            except AttributeError:
+                styler = styler.applymap(_colour_rho, subset=["Δρ"])
+
             st.dataframe(
-                val_df.style.applymap(_colour_rho, subset=["Δρ"]),
+                styler,
                 use_container_width=True, hide_index=True,
             )
 
